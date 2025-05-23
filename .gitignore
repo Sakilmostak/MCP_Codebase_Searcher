@@ -16,6 +16,9 @@ venv/
 ENV/
 env/
 
+# Python Virtual Environment
+venv/
+
 # Editor directories and files
 .idea
 .vscode
