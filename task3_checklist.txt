@@ -9,22 +9,26 @@ Task #3: Implement File Scanning Module - Checklist
 *   [x] **3.2: Implement Directory Traversal Logic** (in `scan_directory`)
     *   [x] Use `os.walk` to recursively traverse the `root_path`.
     *   [x] For each file found, construct its full path.
-*   [ ] **3.3: Implement File/Directory Exclusion Logic** (in `_is_excluded` and used by `scan_directory`)
-    *   [ ] Handle excluded directory names (e.g., `.git`, `__pycache__`, `venv`).
-    *   [ ] Handle excluded file names/patterns (e.g., using `fnmatch` for glob patterns like `*.log`, `temp_*`).
-    *   [ ] Ensure paths are normalized for consistent matching.
-*   [ ] **3.4: Implement Binary File Detection/Exclusion** (in `_is_binary` and used by `scan_directory`)
-    *   [ ] Maintain a list of common binary file extensions to exclude by default (e.g., `.pyc`, `.png`, `.jpg`, `.o`, `.so`, `.dll`, `.exe`).
-    *   [ ] Implement a heuristic to detect binary content in files without common binary extensions (e.g., check a sample of bytes for a high proportion of null bytes or non-printable characters).
-*   [ ] **3.5: Integrate and Test FileScanner Module**
-    *   [ ] `scan_directory` should call `_is_excluded` and `_is_binary` to filter files.
-    *   [ ] Return a list of valid (non-excluded, non-binary) file paths.
-    *   [ ] Create a simple test script (e.g., in `if __name__ == '__main__':` block of `file_scanner.py` or a separate test file) to:
-        *   Set up a dummy directory structure with various files and subdirectories.
-        *   Include files that should be scanned, files to be excluded by name/pattern, binary files, and files in excluded directories.
-        *   Instantiate `FileScanner` with appropriate exclusion settings.
-        *   Call `scan_directory` and assert that the returned list of files is correct.
-*   [ ] **3.6: Unit and Integration Testing for File Scanning Module** (Formal tests for `pytest` or `unittest`)
-    *   [ ] Write unit tests for `_is_excluded` with various patterns and paths.
-    *   [ ] Write unit tests for `_is_binary` with known text and binary file samples/content.
-    *   [ ] Write integration tests for `scan_directory` using `pathlib` to create temporary test directory structures. 
+*   [x] **3.3: Implement File/Directory Exclusion Logic** (in `_is_excluded` and used by `scan_directory`)
+    *   [x] Handle excluded directory names (e.g., `.git`, `__pycache__`, `venv`).
+    *   [x] Handle excluded file names/patterns (e.g., using `fnmatch` for glob patterns like `*.log`, `temp_*`).
+    *   [x] Ensure paths are normalized for consistent matching.
+*   [x] **3.4: Implement Binary File Detection/Exclusion** (in `_is_binary` and used by `scan_directory`)
+    *   [x] Maintain a list of common binary file extensions to exclude by default (e.g., `.pyc`, `.png`, `.jpg`, `.o`, `.so`, `.dll`, `.exe`).
+    *   [x] Implement a heuristic to detect binary content in files without common binary extensions (e.g., check a sample of bytes for a high proportion of null bytes or non-printable characters).
+*   [x] **3.5: Integrate and Test FileScanner Module**
+    *   [x] `scan_directory` should call `_is_excluded` and `_is_binary` to filter files.
+    *   [x] Return a list of valid (non-excluded, non-binary) file paths.
+    *   [x] Create a simple test script (e.g., in `if __name__ == '__main__':` block of `file_scanner.py` or a separate test file) to:
+        *   [x] Set up a dummy directory structure with various files and subdirectories.
+        *   [x] Include files that should be scanned, files to be excluded by name/pattern, binary files, and files in excluded directories.
+        *   [x] Instantiate `FileScanner` with appropriate exclusion settings.
+        *   [x] Call `scan_directory` and assert that the returned list of files is correct.
+*   [x] **3.6: Create Unit Tests for FileScanner**
+    *   [x] Create a dedicated test file (e.g., `test_file_scanner.py`) using a testing framework like `unittest` or `pytest`.
+    *   [x] Write comprehensive unit tests for:
+        *   [x] Write unit tests for `_is_excluded` with various patterns and paths.
+        *   [x] Write unit tests for `_is_binary` with known text and binary file samples/content.
+        *   [x] Write integration tests for `scan_directory` using `pathlib` to create temporary test directory structures. (Covered by existing tests with `tempfile`)
+
+**Status: Task #3 Complete.** 
