@@ -3,6 +3,9 @@
 import google.generativeai as genai
 import os
 import sys
+from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.generativeai.types import BlockedPromptException # Explicit import for clarity
+import google.api_core.exceptions # For more specific API error handling
 
 # Assuming config.py is in the same directory or PYTHONPATH
 try:
@@ -162,33 +165,44 @@ class ContextAnalyzer:
         )
 
         try:
-            # print(f"\nDEBUG: Prompt for LLM:\n{prompt}\n") # For debugging prompt issues
-            response = self.model.generate_content(prompt)
-            # print(f"\nDEBUG: Raw LLM Response Parts: {response.parts}") # For debugging response structure
-            # print(f"\nDEBUG: Raw LLM Response Text: {response.text}") # For debugging response structure
-            
-            if response.parts:
-                # Assuming the first part contains the text we want, typical for gemini-pro
-                # Some models might have multiple parts or different structures.
-                # Accessing response.text is usually the most straightforward for simple text responses.
-                return response.text.strip()
-            elif hasattr(response, 'text') and response.text: # Check if .text exists and is not empty
-                 return response.text.strip()
-            else:
-                # Fallback or error if the response structure is unexpected or empty
-                # This might happen if the content was blocked by safety settings and no fallback text is provided.
-                # Check for prompt_feedback for reasons like safety blocking.
-                if response.prompt_feedback and response.prompt_feedback.block_reason:
-                    return f"Error: Content generation blocked. Reason: {response.prompt_feedback.block_reason}."
-                return "Error: Received an empty or unparsable response from the AI model."
+            # print(f"DEBUG: Prompt sent to Gemini: --------\n{{prompt}}\n----------") # DEBUG
+            response = self.model.generate_content(
+                prompt,
+                # stream=True # Consider if streaming makes sense here for long elaborations
+            )
+            # print(f"DEBUG: Gemini Raw Response: {response}") # DEBUG
 
+            # Check for blocked prompt via prompt_feedback
+            if response.prompt_feedback and response.prompt_feedback.block_reason:
+                reason = response.prompt_feedback.block_reason.name
+                # print(f"Warning: Elaboration for {file_path}:{line_number} blocked by API. Reason: {reason}", file=sys.stderr)
+                return f"[Elaboration blocked by API. Reason: {reason}]"
+            
+            # Accessing parts and text
+            if response.parts:
+                elaboration_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
+                # print(f"DEBUG: Extracted elaboration text: {{elaboration_text}}") # DEBUG
+                if not elaboration_text.strip():
+                    # print(f"Warning: Received empty elaboration from API for {{file_path}}:{{line_number}}.")
+                    return "[Elaboration from API was empty or unparsable]"
+                return elaboration_text
+            else:
+                # This case might occur if the response structure is unexpected or truly empty
+                # print(f"Warning: No parts found in API response for {{file_path}}:{{line_number}}. Response: {{response}}")
+                return "[No content returned from API for elaboration]"
+
+        except BlockedPromptException as e:
+            # print(f"Warning: Elaboration for {{file_path}}:{{line_number}} was explicitly blocked. {{e}}", file=sys.stderr)
+            return f"[Elaboration blocked by API: {e}]"
+        except google.api_core.exceptions.GoogleAPIError as e:
+            error_message = f"API error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
+            # print(f"Warning: {{error_message}}", file=sys.stderr)
+            return f"[{error_message}]"
         except Exception as e:
-            # Catching a broad range of potential API errors
-            # e.g., google.api_core.exceptions.GoogleAPIError subclasses like InvalidArgument, PermissionDenied, etc.
-            # or general network issues that might manifest as other exceptions.
-            error_message = f"Error during AI model generation: {type(e).__name__} - {e}"
-            print(error_message, file=sys.stderr)
-            return error_message
+            # Catch any other unexpected errors during generation
+            error_message = f"Unexpected error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
+            # print(f"Warning: {{error_message}}", file=sys.stderr)
+            return f"[{error_message}]"
 
 if __name__ == '__main__':
     print("MCP Elaborate module direct execution (for testing during dev)")

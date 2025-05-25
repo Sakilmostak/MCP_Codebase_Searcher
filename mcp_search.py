@@ -70,6 +70,9 @@ class Searcher:
         if hasattr(self, '_current_file_content_ref'):
             del self._current_file_content_ref
 
+        if not isinstance(file_paths, list):
+            file_paths = [file_paths]
+
         for file_path in file_paths:
             content = self._read_file_content(file_path)
             if content is None:
@@ -273,76 +276,70 @@ class Searcher:
         
         return "\n".join(snippet_lines)
 
-if __name__ == '__main__':
-    # Example Usage (will be more useful once methods are implemented)
-    try:
-        print("Testing Searcher initialization...")
-        searcher_plain = Searcher("hello world", is_case_sensitive=False)
-        print(f"Plain searcher initialized for query: '{searcher_plain.query}'")
-        
-        searcher_regex_valid = Searcher(r"^[a-zA-Z]+\s*world$", is_regex=True, is_case_sensitive=True)
-        print(f"Regex searcher initialized for pattern: '{searcher_regex_valid.query}'")
+# The __main__ block below was for temporary manual testing during Task 4 development.
+# It has been superseded by the main CLI script mcp_searcher.py and unit tests.
+# It is now removed to avoid confusion and potential SyntaxWarnings during import.
 
-        print("\nTesting invalid regex:")
-        try:
-            searcher_regex_invalid = Searcher(r"([a-z", is_regex=True)
-        except ValueError as e:
-            print(f"Caught expected error for invalid regex: {e}")
+# if __name__ == '__main__':
+#     print("MCP Search module direct execution (for testing during dev)")
 
-        # Placeholder for actual search calls later
-        # dummy_files = ["file1.txt", "file2.txt"]
-        # results = searcher_plain.search_files(dummy_files)
-        # print(f"\nSearch results (plain, placeholder): {results}")
+#     # Create a temporary directory for test files
+#     temp_dir = "temp_search_test_dir"
+#     os.makedirs(temp_dir, exist_ok=True)
 
-    except Exception as e:
-        print(f"An error occurred during Searcher example: {e}") 
+#     sample_file_1 = os.path.join(temp_dir, "sample1.txt")
+#     with open(sample_file_1, "w") as f:
+#         f.write("This is a sample file.\n")
+#         f.write("It contains the word example several times.\n")
+#         f.write("Another line with Example, and EXAMPLE.\n")
+#         f.write("An example of a longer line with example repeated example example.\n")
 
-'''
-if __name__ == '__main__':
-    print("--- Manual Test for Searcher --- traumatised")
-    # Setup a temporary directory and files for testing
-    temp_dir = "temp_search_test_dir"
-    os.makedirs(temp_dir, exist_ok=True)
-
-    file1_path = os.path.join(temp_dir, "sample1.txt")
-    with open(file1_path, 'w') as f:
-        f.write("This is the first sample file.\nIt contains the word 'example' multiple times.\nExample line three.\nCase EXAMPLE here.")
-
-    file2_path = os.path.join(temp_dir, "sample2.py")
-    with open(file2_path, 'w') as f:
-        f.write("# Python sample file\ndef example_function():\n    print(\"Another example of example code.\")\n\n# End of example")
-
-    file_paths_to_search = [file1_path, file2_path, os.path.join(temp_dir, "nonexistent.txt")]
-
-    print(f"\nSearching for 'example' (case-insensitive, context 1 line):")
-    searcher1 = Searcher(query="example", is_case_sensitive=False, context_lines=1)
-    results1 = searcher1.search_files(file_paths_to_search)
-    for res in results1:
-        print(f"  File: {os.path.basename(res['file_path'])}, Line: {res['line_number']}, Match: '{res['match_text']}'")
-        print(f"  Snippet:\n{res['snippet']}")
-        print("---")
-
-    print(f"\nSearching for r'example\w*' (regex, case-sensitive, context 0 lines):")
-    searcher2 = Searcher(query=r"example\w*", is_regex=True, is_case_sensitive=True, context_lines=0)
-    results2 = searcher2.search_files(file_paths_to_search)
-    for res in results2:
-        print(f"  File: {os.path.basename(res['file_path'])}, Line: {res['line_number']}, Match: '{res['match_text']}'")
-        print(f"  Snippet:\n{res['snippet']}")
-        print("---")
+#     sample_file_2 = os.path.join(temp_dir, "sample2.py")
+#     with open(sample_file_2, "w") as f:
+#         f.write("# Python example code\n")
+#         f.write("def example_function():\n")
+#         f.write("    # This function is an example\n")
+#         f.write("    return \"example_string\"\n")
     
-    print(f"\nSearching for 'First SAmple' (case-sensitive, should NOT be found):")
-    searcher3 = Searcher(query="First SAmple", is_case_sensitive=True, context_lines=1)
-    results3 = searcher3.search_files(file_paths_to_search)
-    if not results3:
-        print("  Correctly found no matches.")
-    else:
-        print("  ERROR: Should not have found matches!")
-        for res in results3:
-            print(f"    File: {os.path.basename(res['file_path'])}, Line: {res['line_number']}, Match: '{res['match_text']}'")
+#     files_to_scan = [sample_file_1, sample_file_2]
 
-    # Cleanup
-    print("\nCleaning up temporary test directory...")
-    # shutil.rmtree(temp_dir) # Let's not delete for now, to inspect files if needed
-    print(f"Temporary files are in: {os.path.abspath(temp_dir)}")
-    print("--- Manual Test Complete ---")
-''' 
+#     print(f"\n--- Test 1: Plain string search (case-insensitive) for 'example' ---")
+#     searcher1 = Searcher(query="example", is_case_sensitive=False, context_lines=1)
+#     results1 = searcher1.search_files(files_to_scan)
+#     for res in results1:
+#         print(f"  File: {os.path.basename(res['file_path'])}, Line: {res['line_number']}, Match: '{res['match_text']}'")
+#         print(f"  Snippet:\n{res['snippet']}")
+#         print("  ----")
+
+#     print(f"\n--- Test 2: Regex search (case-insensitive) for r'example\\w*' ---") 
+#     # searcher2 = Searcher(query=r"example\w*", is_regex=True, is_case_sensitive=False, context_lines=1)
+#     # Fixed regex: remove extra backslash if not intended to be literal
+#     searcher2 = Searcher(query=r"example\\w*", is_regex=True, is_case_sensitive=False, context_lines=1)
+#     try:
+#         results2 = searcher2.search_files(files_to_scan)
+#         for res in results2:
+#             print(f"  File: {os.path.basename(res['file_path'])}, Line: {res['line_number']}, Match: '{res['match_text']}'")
+#             print(f"  Snippet:\n{res['snippet']}")
+#             print("  ----")
+#     except ValueError as e:
+#         print(f"Error during regex search: {e}")
+
+#     print(f"\n--- Test 3: Plain string search (case-sensitive) for 'example' ---")
+#     searcher3 = Searcher(query="example", is_case_sensitive=True, context_lines=2)
+#     results3 = searcher3.search_files(files_to_scan)
+#     for res in results3:
+#         print(f"  File: {os.path.basename(res['file_path'])}, Line: {res['line_number']}, Match: '{res['match_text']}'")
+#         print(f"  Snippet:\n{res['snippet']}")
+#         print("  ----")
+
+#     print(f"\n--- Test 4: No match search ---")
+#     searcher4 = Searcher(query="nonexistentquery")
+#     results4 = searcher4.search_files(files_to_scan)
+#     if not results4:
+#         print("  No matches found, as expected.")
+
+    # # Clean up temporary directory
+    # # import shutil
+    # # shutil.rmtree(temp_dir)
+    # print(f"\nNote: Temporary test directory '{temp_dir}' was NOT removed automatically.")
+    # print("Please remove it manually if desired.") 

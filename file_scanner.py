@@ -1,5 +1,6 @@
 import os
 import fnmatch
+import sys
 
 # Default exclusion patterns and extensions
 DEFAULT_EXCLUDED_DIRS = ['.git', '__pycache__', 'venv', 'node_modules', '.hg', '.svn']
@@ -58,7 +59,7 @@ class FileScanner:
         normalized_root_path = os.path.abspath(os.path.expanduser(root_path))
 
         if not os.path.isdir(normalized_root_path):
-            print(f"Error: Root path '{normalized_root_path}' is not a valid directory.")
+            print(f"Error: Root path '{normalized_root_path}' is not a valid directory.", file=sys.stderr)
             return []
 
         for dirpath, dirnames, filenames in os.walk(normalized_root_path):
@@ -149,56 +150,49 @@ class FileScanner:
         return False # Default to not excluded if no rules matched
 
     def _is_binary(self, file_path):
-        """
-        Checks if a given file is likely a binary file.
-
-        Args:
-            file_path (str): The absolute path to the file.
-
-        Returns:
-            bool: True if the file is considered binary, False otherwise.
-        """
-        # Part 1: Check by file extension
+        """Check if a file is likely binary. Extends checks beyond just extensions."""
+        # First, check by extension (common binary types)
         _, ext = os.path.splitext(file_path)
         if ext.lower() in self.binary_extensions:
             return True
 
-        # Part 2: Heuristic check for files without common binary extensions
+        # Second, try to read a chunk and check for null bytes or too many non-text chars
         try:
             with open(file_path, 'rb') as f:
-                chunk = f.read(1024)  # Read a sample chunk (e.g., 1KB)
-            if not chunk: # Empty file
+                chunk = f.read(1024) # Read the first 1KB
+            if not chunk: # Empty file is not considered binary for our purposes
                 return False
-
-            if not hasattr(FileScanner, '_TEXTCHAR_INTS'):
-                textchar_list = list(range(32, 127))
-                whitespace_ints = [ord(c) for c in '\n\r\t\f\b']
-                FileScanner._TEXTCHAR_INTS = frozenset(textchar_list + whitespace_ints)
             
-            textchar_ints = FileScanner._TEXTCHAR_INTS
-
-            if 0 in chunk: # Check for null byte (integer value 0)
+            # Heuristic 1: Presence of null byte
+            if b'\0' in chunk:
                 return True
 
-            # Count non-text characters
-            non_text_char_count = 0
-            for byte_val in chunk:
-                if byte_val not in textchar_ints:
-                    non_text_char_count += 1
+            # Heuristic 2: High proportion of non-text characters
+            # This is a more complex heuristic and might need adjustment.
+            # For simplicity, we can check the proportion of non-printable ASCII or non-UTF8 decodable bytes.
+            # Using a simple check for common text characters for now.
+            text_characters = "".join(map(chr, range(32, 127))) + "\n\r\t\b"
+            non_text_chars = 0
+            for byte in chunk:
+                if chr(byte) not in text_characters:
+                    non_text_chars += 1
             
-            # If more than, say, 20% of the characters are non-text, consider it binary
-            # This threshold can be adjusted.
-            if len(chunk) > 0: # Avoid division by zero for extremely small, non-empty files
-                if (non_text_char_count / len(chunk)) > 0.20:
-                    return True
+            # If more than, say, 30% of the chunk are non-text characters, assume binary.
+            # This threshold is arbitrary and might need tuning.
+            if non_text_chars / len(chunk) > 0.30:
+                return True
+                
+        except IOError as e:
+            # If we can't read the file for binary check (e.g., permission denied, or file disappeared)
+            # print a warning and default to not treating it as binary to be safe.
+            print(f"Warning: Could not read file {file_path} to check if binary: {e}. Assuming non-binary.", file=sys.stderr)
+            return False # Default to False if read fails
+        except Exception as e:
+            # Catch any other unexpected error during binary check
+            print(f"Warning: Unexpected error checking if file {file_path} is binary: {e}. Assuming non-binary.", file=sys.stderr)
+            return False
 
-        except IOError:
-            # Could log this error, but for now, if we can't read it, assume not processable as text
-            # or potentially binary if it's unreadable due to permissions/corruption that might correlate
-            # For safety in a searcher, treating unreadable as "not text" is safer.
-            return True 
-        
-        return False # Default to not binary if heuristic doesn't flag it
+        return False
 
 if __name__ == '__main__':
     # This block is now primarily for potential standalone execution or basic checks,
