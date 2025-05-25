@@ -1,0 +1,57 @@
+Task #5: Implement Main CLI Script (`mcp_searcher.py`) - Checklist
+
+*   [x] **5.1: Define Command-Line Arguments (`argparse`)**
+    *   [x] Positional argument: `query` (search term, required).
+    *   [x] Positional argument: `paths` (one or more directories/files to search, nargs='+', required).
+    *   [x] Optional: `--regex` / `-r` (treat query as regex, action='store_true').
+    *   [x] Optional: `--case-sensitive` / `-c` (case-sensitive search, action='store_true').
+    *   [x] Optional: `--context LINES` / `-C LINES` (number of context lines, type=int, default=3).
+    *   [x] Optional: `--exclude-dirs DIRS_STR` (comma-separated dir patterns like `node_modules,.git`).
+    *   [x] Optional: `--exclude-files FILES_STR` (comma-separated file patterns like `*.log,*.tmp`).
+    *   [x] Optional: `--include-hidden` (scan hidden files/dirs, normally excluded by default `FileScanner`, action='store_true').
+    *   [x] Optional: `--elaborate` / `-e` (placeholder for future LLM elaboration, action='store_true').
+
+*   [x] **5.2: Implement Main Script Logic in `mcp_searcher.py`**
+    *   [x] Create `main()` function.
+    *   [x] Call argument parsing function.
+    *   [x] Process `exclude-dirs` and `exclude-files` strings into lists.
+    *   [x] Initialize `FileScanner`:
+        *   [x] Pass custom `excluded_dirs` and `excluded_files` if provided.
+        *   [x] Handle `--include-hidden`: If true, instantiate `FileScanner` with `exclude_dot_items=False`.
+    *   [x] Collect target files:
+        *   [x] Iterate through `args.paths`.
+        *   [x] If a path is a directory, call `file_scanner.scan_directory(path)`.
+        *   [x] If a path is a file, check `os.path.isfile()` and add it (conditionally based on `_is_excluded`).
+        *   [x] Ensure unique file paths in the final list (using `set`).
+    *   [x] Initialize `Searcher` with query, regex flag, case-sensitivity flag, context lines from args.
+    *   [x] Call `searcher.search_files()` with the collected file list.
+
+*   [x] **5.3: Implement Basic Results Display in `main()`**
+    *   [x] Iterate through search results.
+    *   [x] Print file path, line number, and snippet for each result.
+    *   [x] Print a summary (e.g., "Found X matches in Y files.").
+    *   [x] If `args.elaborate` is true, print a placeholder message about elaboration.
+
+*   [x] **5.4: Add Error Handling in `main()`**
+    *   [x] Handle `ValueError` from `Searcher` if regex pattern is invalid (print error and exit).
+    *   [x] Handle cases where initial paths provided in `args.paths` do not exist (print error and skip/exit).
+    *   [x] Handle case where no files are found to search after scanning/filtering.
+
+*   [x] **5.5: Create `if __name__ == '__main__':` block in `mcp_searcher.py`**
+    *   [x] Call the `main()` function.
+
+*   [x] **5.6: Manual Testing of CLI Script**
+    *   [x] Test basic search: `python mcp_searcher.py "query" .`
+    *   [x] Test with regex: `python mcp_searcher.py -r "pattern" src/`
+    *   [x] Test case sensitivity: `python mcp_searcher.py -c "Query" .`
+    *   [x] Test context lines: `python mcp_searcher.py -C 1 "query" .`
+    *   [x] Test exclusions: `python mcp_searcher.py --exclude-dirs "venv" --exclude-files "*.log" "query" .`
+    *   [x] Test `--include-hidden`.
+    *   [x] Test with multiple path arguments.
+    *   [x] Test with non-existent initial path.
+    *   [x] Test with invalid regex.
+
+*   [-] **5.7: (Optional) Unit Tests for CLI Argument Parsing**
+    *   [-] If argument parsing logic becomes complex, add dedicated unit tests. For now, manual testing might suffice. (Skipped for now)
+
+**Status: Completed.** 

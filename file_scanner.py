@@ -22,7 +22,8 @@ DEFAULT_BINARY_EXTENSIONS = [
 class FileScanner:
     """Scans a directory for files, applying exclusion rules and detecting binary files."""
 
-    def __init__(self, excluded_dirs=None, excluded_files=None, binary_extensions=None, custom_exclude_patterns=None):
+    def __init__(self, excluded_dirs=None, excluded_files=None, binary_extensions=None, 
+                 custom_exclude_patterns=None, exclude_dot_items=True):
         """
         Initializes the FileScanner with exclusion configurations.
 
@@ -34,12 +35,13 @@ class FileScanner:
             binary_extensions (list, optional): List of file extensions to treat as binary.
                                                 Defaults to DEFAULT_BINARY_EXTENSIONS.
             custom_exclude_patterns (list, optional): Additional custom glob patterns for exclusion (files or dirs).
+            exclude_dot_items (bool, optional): If True (default), generally exclude files/dirs starting with '.'.
         """
         self.excluded_dirs = set(excluded_dirs if excluded_dirs is not None else DEFAULT_EXCLUDED_DIRS)
         self.excluded_files = list(excluded_files if excluded_files is not None else DEFAULT_EXCLUDED_FILES)
         self.binary_extensions = set(binary_extensions if binary_extensions is not None else DEFAULT_BINARY_EXTENSIONS)
-        
         self.custom_exclude_patterns = list(custom_exclude_patterns if custom_exclude_patterns is not None else [])
+        self.exclude_dot_items = exclude_dot_items
 
     def scan_directory(self, root_path):
         """
@@ -92,7 +94,19 @@ class FileScanner:
         """
         basename = os.path.basename(path_to_check)
         normalized_path = os.path.normpath(path_to_check)
-        relative_path = os.path.relpath(normalized_path, scan_root_path)
+        # Ensure scan_root_path is absolute and expanded for relpath calculation
+        normalized_scan_root_path = os.path.abspath(os.path.expanduser(scan_root_path))
+        relative_path = os.path.relpath(normalized_path, normalized_scan_root_path)
+
+        # General check for dot items if enabled
+        if self.exclude_dot_items and basename.startswith('.'):
+            # However, allow if it's the scan root itself (e.g. scanning ".")
+            if normalized_path == normalized_scan_root_path and basename == ".": # an edge case, scanning "." itself
+                pass # Do not exclude the scan root itself if it's "."
+            elif normalized_path == normalized_scan_root_path and is_dir: # If path_to_check is the scan root dir
+                pass # Don't exclude the root dir itself based on its name, allow descent
+            else:
+                return True
 
         if is_dir:
             if basename in self.excluded_dirs:
@@ -111,9 +125,10 @@ class FileScanner:
                     if basename == pattern_base or relative_path == pattern_base:
                         return True
                 # Option 3: General glob match on basename or relative_path for other patterns
-                elif fnmatch.fnmatch(basename, pattern):
-                    return True
-                elif fnmatch.fnmatch(relative_path, pattern):
+                # that are not explicitly file patterns (don't contain typical file extensions)
+                # This is heuristic; specific file patterns are handled in the 'else' block
+                elif not any(ext in pattern for ext in ['.', '*']) and (fnmatch.fnmatch(basename, pattern) or fnmatch.fnmatch(relative_path, pattern)):
+                    # If pattern looks like a dir name (no typical file wildcards/extensions) and matches
                     return True
         else: # This is a file
             # Check against default excluded file patterns (globs on basename)
