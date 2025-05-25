@@ -45,9 +45,11 @@ Task #6: Implement LLM Elaboration Module (`mcp_elaborate.py`) - Checklist
     *   [x] Verify that elaboration output appears and is relevant.
     *   [x] Test behavior when API key is missing or invalid (if feasible to simulate safely).
 
-*   [ ] **6.8: (Optional) Unit Tests for `ContextAnalyzer`**
-    *   [ ] Mock the Gemini API calls.
-    *   [ ] Test prompt generation logic.
-    *   [ ] Test API response handling and error conditions.
+*   [x] **6.8: (Optional) Unit Tests for `ContextAnalyzer`**
+    *   [x] Mock the Gemini API calls.
+    *   [x] Test prompt generation logic.
+    *   [x] Test API response handling and error conditions.
+    *   [x] Test API key loading from direct param, config, and environment variable.
+    *   [x] Test error handling for missing API key and model initialization failure.
 
-**Status: Completed (Unit Tests Skipped).** 
+**Status: Completed.** 

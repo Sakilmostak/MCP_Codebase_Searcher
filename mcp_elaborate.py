@@ -52,18 +52,29 @@ class ContextAnalyzer:
             }
         ]
 
-        if not self.api_key:
-            if config:
+        if not self.api_key: # If api_key was not directly passed to __init__
+            loaded_from_config = False
+            if config: # Check if the config module was successfully imported
                 try:
                     self.api_key = config.load_api_key()
-                    if not self.api_key:
+                    if self.api_key:
+                        loaded_from_config = True
+                        # print("Info: API key loaded from config.", file=sys.stderr) # Optional: for debugging
+                    else:
+                        # This means load_api_key() was called but returned None/empty
                         print("Warning: API key loaded from config is empty.", file=sys.stderr)
                 except Exception as e:
                     print(f"Warning: Could not load API key from config: {e}", file=sys.stderr)
-            else: # config module not imported
-                 self.api_key = os.getenv('GOOGLE_API_KEY') # Fallback to direct env var
-                 if not self.api_key:
-                    print("Warning: API key not provided and could not be loaded from GOOGLE_API_KEY environment variable.", file=sys.stderr)
+            
+            # If not loaded from config (either config module missing, load_api_key failed, or returned empty)
+            # then try to load from environment variable.
+            if not loaded_from_config and not self.api_key:
+                 self.api_key = os.getenv('GOOGLE_API_KEY')
+                 if self.api_key:
+                    # print("Info: API key loaded from GOOGLE_API_KEY environment variable.", file=sys.stderr) # Optional
+                    pass
+                 else:
+                    print("Warning: API key not provided via config and could not be loaded from GOOGLE_API_KEY environment variable.", file=sys.stderr)
         
         if not self.api_key:
             self.model = None
