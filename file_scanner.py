@@ -95,59 +95,65 @@ class FileScanner:
         """
         basename = os.path.basename(path_to_check)
         normalized_path = os.path.normpath(path_to_check)
-        # Ensure scan_root_path is absolute and expanded for relpath calculation
         normalized_scan_root_path = os.path.abspath(os.path.expanduser(scan_root_path))
+        
+        # Ensure path_to_check is within scan_root_path. If not, it's an invalid scenario for relpath.
+        # However, os.walk should generally prevent this. If path_to_check is outside,
+        # os.relpath might produce ".." parts, which is fine for the dot check.
         relative_path = os.path.relpath(normalized_path, normalized_scan_root_path)
 
         # General check for dot items if enabled
-        if self.exclude_dot_items and basename.startswith('.'):
-            # However, allow if it's the scan root itself (e.g. scanning ".")
-            if normalized_path == normalized_scan_root_path and basename == ".": # an edge case, scanning "." itself
-                pass # Do not exclude the scan root itself if it's "."
-            elif normalized_path == normalized_scan_root_path and is_dir: # If path_to_check is the scan root dir
-                pass # Don't exclude the root dir itself based on its name, allow descent
+        if self.exclude_dot_items:
+            # Allow the scan root itself, even if it's a dot path (e.g. scanning "./.mcp_project")
+            if normalized_path == normalized_scan_root_path:
+                pass # Don't exclude the scan root itself based on its name
             else:
-                return True
+                # Check if any part of the relative path starts with a dot,
+                # excluding "." and ".." which are normal path components.
+                path_parts = relative_path.split(os.sep)
+                if any(part.startswith('.') and part not in ['.', '..'] for part in path_parts):
+                    return True
 
         if is_dir:
-            if basename in self.excluded_dirs:
+            if basename in self.excluded_dirs: # Check against exact directory names like "node_modules"
                 return True
             
+            # Check custom patterns for directories
             for pattern in self.custom_exclude_patterns:
-                # Option 1: Pattern explicitly targets a directory with a trailing slash (e.g., "build/")
-                if pattern.endswith(os.sep) or pattern.endswith('/'):
-                    if fnmatch.fnmatch(relative_path + os.sep, pattern) or \
-                       fnmatch.fnmatch(basename, pattern.rstrip(os.sep + '/')):
-                        return True
-                # Option 2: Pattern implies a directory and its contents (e.g., "build/*")
-                elif pattern.endswith('/*') and not pattern.endswith('//*'):
-                    pattern_base = pattern[:-2]  # Extracts "build" from "build/*"
-                    
-                    if basename == pattern_base or relative_path == pattern_base:
-                        return True
-                # Option 3: General glob match on basename or relative_path for other patterns
-                # that are not explicitly file patterns (don't contain typical file extensions)
-                # This is heuristic; specific file patterns are handled in the 'else' block
-                elif not any(ext in pattern for ext in ['.', '*']) and (fnmatch.fnmatch(basename, pattern) or fnmatch.fnmatch(relative_path, pattern)):
-                    # If pattern looks like a dir name (no typical file wildcards/extensions) and matches
+                # Pattern explicitly targets a directory with a trailing slash (e.g., "build/")
+                # or is just a name that could be a directory (e.g. "build")
+                # fnmatch on basename for patterns like "dirname" or "dirname/"
+                # fnmatch on relative_path for patterns like "path/to/dirname" or "path/to/dirname/"
+                
+                # If pattern is "name" or "name/", match "name" against basename
+                if fnmatch.fnmatch(basename, pattern.rstrip(os.sep + '/')) :
                     return True
+                # If pattern is "path/name" or "path/name/", match "path/name" against relative_path
+                # Ensure relative_path also has a trailing sep if pattern does, for consistency
+                # Though fnmatch usually handles this fine for dir/* type patterns.
+                if fnmatch.fnmatch(relative_path, pattern.rstrip(os.sep + '/')) :
+                    return True
+                # For patterns like "dir/*"
+                if pattern.endswith('/*') and fnmatch.fnmatch(relative_path, pattern[:-2]): # match "path/dir" against "dir"
+                    return True
+
         else: # This is a file
             # Check against default excluded file patterns (globs on basename)
-            for pattern in self.excluded_files:
+            for pattern in self.excluded_files: # These are from DEFAULT_EXCLUDED_FILES
                 if fnmatch.fnmatch(basename, pattern):
                     return True
             
-            # Check against custom exclude patterns (globs on basename and relative path)
+            # Check against custom exclude patterns for files
             for pattern in self.custom_exclude_patterns:
-                # If pattern ends with /, it's a directory pattern, skip for files
-                if pattern.endswith(os.sep) or pattern.endswith('/'):
+                if pattern.endswith(os.sep) or pattern.endswith('/'): # Skip dir patterns
                     continue
                 if fnmatch.fnmatch(basename, pattern):
                     return True
+                # Also check relative path for file patterns like "path/to/file.txt"
                 if fnmatch.fnmatch(relative_path, pattern):
                     return True
-
-        return False # Default to not excluded if no rules matched
+        
+        return False # Default to not excluded
 
     def _is_binary(self, file_path):
         """Check if a file is likely binary. Extends checks beyond just extensions."""

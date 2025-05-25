@@ -29,7 +29,7 @@ class ContextAnalyzer:
             model_name (str, optional): The name of the Gemini model to use. Defaults to 'gemini-1.5-flash-latest'.
         """
         self.model_name = model_name
-        self.api_key = api_key
+        self.api_key = api_key  # Prioritize direct parameter
         self.generation_config = genai.types.GenerationConfig(
             # temperature=0.7, # Example: Adjust creativity
             # top_p=0.9,       # Example: Adjust token sampling
@@ -55,30 +55,26 @@ class ContextAnalyzer:
             }
         ]
 
-        if not self.api_key: # If api_key was not directly passed to __init__
-            loaded_from_config = False
+        if not self.api_key:
+            # Try environment variable next
+            self.api_key = os.getenv('GOOGLE_API_KEY')
+            # if self.api_key:
+            #     print("Info: API key loaded from GOOGLE_API_KEY environment variable.", file=sys.stderr)
+
+        if not self.api_key:
+            # Try config file last
             if config: # Check if the config module was successfully imported
                 try:
                     self.api_key = config.load_api_key()
-                    if self.api_key:
-                        loaded_from_config = True
-                        # print("Info: API key loaded from config.", file=sys.stderr) # Optional: for debugging
-                    else:
-                        # This means load_api_key() was called but returned None/empty
-                        print("Warning: API key loaded from config is empty.", file=sys.stderr)
+                    # if self.api_key:
+                    #     print("Info: API key loaded from config.", file=sys.stderr)
+                    # else:
+                    #     print("Warning: API key loaded from config is empty.", file=sys.stderr)
                 except Exception as e:
                     print(f"Warning: Could not load API key from config: {e}", file=sys.stderr)
-            
-            # If not loaded from config (either config module missing, load_api_key failed, or returned empty)
-            # then try to load from environment variable.
-            if not loaded_from_config and not self.api_key:
-                 self.api_key = os.getenv('GOOGLE_API_KEY')
-                 if self.api_key:
-                    # print("Info: API key loaded from GOOGLE_API_KEY environment variable.", file=sys.stderr) # Optional
-                    pass
-                 else:
-                    print("Warning: API key not provided via config and could not be loaded from GOOGLE_API_KEY environment variable.", file=sys.stderr)
-        
+            # else:
+            #     print("Warning: config module not available for API key loading.", file=sys.stderr)
+
         if not self.api_key:
             self.model = None
             print("Error: ContextAnalyzer initialized without an API key. Elaboration will not function.", file=sys.stderr)
@@ -175,7 +171,7 @@ class ContextAnalyzer:
             # Check for blocked prompt via prompt_feedback
             if response.prompt_feedback and response.prompt_feedback.block_reason:
                 reason = response.prompt_feedback.block_reason.name
-                # print(f"Warning: Elaboration for {file_path}:{line_number} blocked by API. Reason: {reason}", file=sys.stderr)
+                print(f"Warning: Elaboration for {file_path}:{line_number} blocked by API. Reason: {reason}", file=sys.stderr)
                 return f"[Elaboration blocked by API. Reason: {reason}]"
             
             # Accessing parts and text
@@ -183,25 +179,25 @@ class ContextAnalyzer:
                 elaboration_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
                 # print(f"DEBUG: Extracted elaboration text: {{elaboration_text}}") # DEBUG
                 if not elaboration_text.strip():
-                    # print(f"Warning: Received empty elaboration from API for {{file_path}}:{{line_number}}.")
+                    print(f"Warning: Received empty elaboration from API for {file_path}:{line_number}.", file=sys.stderr)
                     return "[Elaboration from API was empty or unparsable]"
                 return elaboration_text
             else:
                 # This case might occur if the response structure is unexpected or truly empty
-                # print(f"Warning: No parts found in API response for {{file_path}}:{{line_number}}. Response: {{response}}")
+                print(f"Warning: No parts found in API response for {file_path}:{line_number}. Response: {response}", file=sys.stderr)
                 return "[No content returned from API for elaboration]"
 
         except BlockedPromptException as e:
-            # print(f"Warning: Elaboration for {{file_path}}:{{line_number}} was explicitly blocked. {{e}}", file=sys.stderr)
+            print(f"Warning: Elaboration for {file_path}:{line_number} was explicitly blocked. {e}", file=sys.stderr)
             return f"[Elaboration blocked by API: {e}]"
         except google.api_core.exceptions.GoogleAPIError as e:
             error_message = f"API error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
-            # print(f"Warning: {{error_message}}", file=sys.stderr)
+            print(f"Warning: {error_message}", file=sys.stderr)
             return f"[{error_message}]"
         except Exception as e:
             # Catch any other unexpected errors during generation
             error_message = f"Unexpected error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
-            # print(f"Warning: {{error_message}}", file=sys.stderr)
+            print(f"Warning: {error_message}", file=sys.stderr)
             return f"[{error_message}]"
 
 if __name__ == '__main__':

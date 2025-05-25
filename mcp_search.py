@@ -3,6 +3,7 @@
 import re
 import os # Added for file operations
 import shutil # Added for cleanup
+import sys # Added for printing to stderr
 
 class Searcher:
     """Handles searching for a query within a list of files."""
@@ -53,73 +54,56 @@ class Searcher:
         return line_idx, char_offset_in_line
 
     def search_files(self, file_paths):
-        """
-        Searches for the query in the provided list of file paths.
-
-        Args:
-            file_paths (list): A list of absolute paths to files to search.
-
-        Returns:
-            list: A list of search results. Each result is a dictionary containing:
-                  {'file_path': str, 'line_number': int, 'match_text': str, 'snippet': str}
-        """
+        """Searches for the query in a list of files."""
         all_results = []
-        # Clear any cached line_starts from a previous call to search_files
-        if hasattr(self, '_current_file_line_starts'):
-            del self._current_file_line_starts
-        if hasattr(self, '_current_file_content_ref'):
-            del self._current_file_content_ref
-
         if not isinstance(file_paths, list):
             file_paths = [file_paths]
 
         for file_path in file_paths:
             content = self._read_file_content(file_path)
-            if content is None:
+            if content is None: # If reading failed, skip this file
+                # _read_file_content already prints an error to stderr if it can't read/decode
                 continue
-
-            content_lines = content.splitlines() # Keep newlines for char offsets, but split for line iteration
-            matches_in_file = self._search_in_content(content, file_path)
-
-            for match_info in matches_in_file:
-                # match_info contains: line_number (1-based), match_text, char_start, char_end (global in content)
-                
-                # Get 0-based line index and 0-based char offset within that line for snippet generation
-                match_line_idx, match_start_char_in_line = self._get_line_info_from_char_offset(content, match_info['char_start'])
-                _, match_end_char_in_line = self._get_line_info_from_char_offset(content, match_info['char_end'])
-                
-                # Adjust end char if it's at the start of a new line due to the match ending exactly on \n
-                # This adjustment is tricky. If a match ends with \n, char_end is after \n.
-                # The line identified by match_line_idx will be correct.
-                # match_end_char_in_line might be 0 for the *next* line if match ends exactly at \n.
-                # However, _generate_snippet expects char_end_in_line to be within the match_line_idx.
-                # If char_end_in_line is 0 and it came from char_end pointing to the start of next line,
-                # it means the match consumed the entire current line up to its newline.
-                # So, end_char_in_line for snippet on match_line_idx should be len(content_lines[match_line_idx])
-                if match_info['char_end'] > match_info['char_start'] and \
-                   match_end_char_in_line == 0 and \
-                   match_info['char_end'] > 0 and content[match_info['char_end']-1] == '\n':
-                    match_end_char_in_line = len(content_lines[match_line_idx]) 
-
-                snippet = self._generate_snippet(
-                    content_lines,
-                    match_line_idx, 
-                    match_start_char_in_line, 
-                    match_end_char_in_line
-                )
-                all_results.append({
-                    'file_path': file_path,
-                    'line_number': match_info['line_number'], # Already 1-based from _search_in_content
-                    'match_text': match_info['match_text'],
-                    'snippet': snippet
-                })
             
-            # Clear cached line_starts for the next file
-            if hasattr(self, '_current_file_line_starts'):
-                del self._current_file_line_starts
-            if hasattr(self, '_current_file_content_ref'):
-                del self._current_file_content_ref
-        
+            # Split content into lines for _generate_snippet
+            # We use splitlines() without keepends=True as _generate_snippet reassembles with its own newlines.
+            content_lines = content.splitlines() 
+
+            matches_in_file = self._search_in_content(content, file_path) 
+            
+            for match_info in matches_in_file:
+                # Ensure line_number from match_info is valid for content_lines
+                # match_info['line_number'] is 1-based
+                match_line_idx_0_based = match_info['line_number'] - 1
+
+                if 0 <= match_line_idx_0_based < len(content_lines):
+                    snippet = self._generate_snippet(
+                        content_lines=content_lines, 
+                        match_line_idx=match_line_idx_0_based, 
+                        match_start_char_in_line=match_info['char_start_in_line'], 
+                        match_end_char_in_line=match_info['char_end_in_line']
+                        # file_path is no longer passed to _generate_snippet
+                    )
+                    all_results.append({
+                        'file_path': file_path,
+                        'line_number': match_info['line_number'], # Keep 1-based for output
+                        'match_text': match_info['match_text'],
+                        'char_start_in_line': match_info['char_start_in_line'], # Keep for potential future use
+                        'char_end_in_line': match_info['char_end_in_line'],   # Keep for potential future use
+                        'snippet': snippet
+                    })
+                else:
+                    # This case should ideally not happen if _search_in_content is correct
+                    # and content_lines is derived from the same content string.
+                    # print(f"Warning: Line number {match_info['line_number']} out of bounds for file {file_path}. Skipping snippet.", file=sys.stderr)
+                    all_results.append({
+                        'file_path': file_path,
+                        'line_number': match_info['line_number'],
+                        'match_text': match_info['match_text'],
+                        'char_start_in_line': match_info['char_start_in_line'],
+                        'char_end_in_line': match_info['char_end_in_line'],
+                        'snippet': "[Error: Could not generate snippet due to line number mismatch]"
+                    })
         return all_results
 
     def _read_file_content(self, file_path):
@@ -136,21 +120,19 @@ class Searcher:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
         except UnicodeDecodeError:
-            # print(f"Warning: Could not decode file {file_path} as UTF-8. Skipping.") # Consider logging
-            # For now, we'll try a fallback encoding if UTF-8 fails.
+            # Try latin-1 as a fallback
             try:
                 with open(file_path, 'r', encoding='latin-1') as f:
-                    # print(f"Successfully decoded {file_path} with latin-1.") # Consider logging
+                    print(f"Warning: File '{file_path}' was not UTF-8. Falling back to 'latin-1' and succeeded.", file=sys.stderr)
                     return f.read()
-            except Exception as e_fallback: # Catches UnicodeDecodeError for latin-1 or other IOErrors
-                # print(f"Warning: Could not decode file {file_path} with UTF-8 or latin-1. Error: {e_fallback}. Skipping.")
+            except Exception as e_fallback:
+                print(f"Error: Could not decode file '{file_path}' with UTF-8 or latin-1. Error: {e_fallback}. Skipping file.", file=sys.stderr)
                 return None
         except IOError as e:
-            # print(f"Warning: IOError when reading file {file_path}: {e}. Skipping.") # Consider logging
+            print(f"Error reading file '{file_path}': {e}. Skipping file.", file=sys.stderr)
             return None
         except Exception as e:
-            # Catch-all for other unexpected errors during file reading
-            # print(f"Warning: Unexpected error when reading file {file_path}: {e}. Skipping.")
+            print(f"Unexpected error when reading file '{file_path}': {e}. Skipping file.", file=sys.stderr)
             return None
 
     def _search_in_content(self, content, file_path):
@@ -159,76 +141,83 @@ class Searcher:
 
         Args:
             content (str): The text content to search within.
-            file_path (str): The path of the file (for context/logging, not used in core logic yet).
+            file_path (str): The path of the file (for context/logging).
 
         Returns:
-            list: A list of match information (e.g., dicts with line_number, match_text, char_start, char_end).
-                  char_start and char_end are 0-based character offsets within the entire content.
+            list: A list of match information dicts with:
+                  'line_number': 1-based line number in the file.
+                  'match_text': The actual text that matched.
+                  'char_start_in_line': 0-based start character offset of the match within its line.
+                  'char_end_in_line': 0-based end character offset of the match within its line.
         """
         matches = []
+        if not self.query: # If the original query string is empty, return no matches.
+            return matches
         if not content: # Ensure content is not None or empty
             return matches
 
         # Pre-calculate line start indices for quick line number lookup
+        # line_starts[i] is the character offset of the start of line i+1 in the full content.
         line_starts = [0] + [i + 1 for i, char in enumerate(content) if char == '\n']
         
-        def get_line_number_and_offset(char_offset):
-            line_num = 0
-            for i, start_idx in enumerate(line_starts):
-                if char_offset >= start_idx:
-                    line_num = i + 1 # 1-based line number
+        def get_line_info_from_char_offset(full_content_char_offset):
+            # Finds the 1-based line number and 0-based char offset within that line
+            # for a given character offset in the full content.
+            line_num_1_based = 0
+            char_offset_in_line_0_based = -1
+
+            for i, start_idx_of_line in enumerate(line_starts):
+                if full_content_char_offset >= start_idx_of_line:
+                    line_num_1_based = i + 1 
+                    char_offset_in_line_0_based = full_content_char_offset - start_idx_of_line
                 else:
                     break
-            # Character offset within the found line
-            offset_in_line = char_offset - line_starts[line_num -1]
-            return line_num, offset_in_line
+            return line_num_1_based, char_offset_in_line_0_based
 
         if self.is_regex:
             if self.compiled_regex:
                 for match_obj in self.compiled_regex.finditer(content):
-                    char_start, char_end = match_obj.span()
+                    char_start_full = match_obj.span()[0]
                     match_text = match_obj.group(0)
-                    line_number, _ = get_line_number_and_offset(char_start)
+                    
+                    line_number, char_start_in_line = get_line_info_from_char_offset(char_start_full)
+                    char_end_in_line = char_start_in_line + len(match_text)
+                    
                     matches.append({
-                        'line_number': line_number,
+                        'line_number': line_number, # 1-based
                         'match_text': match_text,
-                        'char_start': char_start, # Offset in entire content
-                        'char_end': char_end      # Offset in entire content
+                        'char_start_in_line': char_start_in_line, # 0-based
+                        'char_end_in_line': char_end_in_line    # 0-based
                     })
         else: # Plain string search
-            search_query = self.query
-            haystack = content
+            search_query_for_find = self.query
+            haystack_for_find = content
             if not self.is_case_sensitive:
-                search_query = search_query.lower()
-                haystack = haystack.lower()
+                search_query_for_find = search_query_for_find.lower()
+                haystack_for_find = haystack_for_find.lower()
             
             current_pos = 0
-            # match_num_debug = 0 # DEBUG
-            # print(f"DEBUG: Plain search for '{search_query}' in haystack (first 60 chars): {haystack[:60].replace('\n', '\\n')}") # DEBUG
-            while current_pos < len(haystack):
-                # print(f"DEBUG: Match Loop: {match_num_debug}, current_pos: {current_pos}") # DEBUG
-                found_pos = haystack.find(search_query, current_pos)
-                # print(f"DEBUG: search_query='{search_query}', haystack[current_pos:current_pos+30]='{haystack[current_pos:current_pos+30].replace('\n','\\n')}...', found_pos (raw from find): {found_pos}") # DEBUG
+            while current_pos < len(haystack_for_find):
+                found_pos_full = haystack_for_find.find(search_query_for_find, current_pos)
 
-                if found_pos == -1:
-                    # print(f"DEBUG: found_pos is -1, breaking.") # DEBUG
+                if found_pos_full == -1:
                     break
                 
-                char_start = found_pos
-                char_end = found_pos + len(search_query)
-                # print(f"DEBUG: char_start={char_start}, char_end={char_end}") # DEBUG
+                char_start_full = found_pos_full 
+                # For plain string search, the length of the match is simply len(self.query)
+                # We need the original casing for match_text from the original content.
+                original_match_text = content[char_start_full : char_start_full + len(self.query)]
                 
-                original_match_text = content[char_start:char_end]
-                line_number, _ = get_line_number_and_offset(char_start)
+                line_number, char_start_in_line = get_line_info_from_char_offset(char_start_full)
+                char_end_in_line = char_start_in_line + len(original_match_text) # Use len of original_match_text
 
                 matches.append({
-                    'line_number': line_number,
+                    'line_number': line_number, # 1-based
                     'match_text': original_match_text,
-                    'char_start': char_start,
-                    'char_end': char_end
+                    'char_start_in_line': char_start_in_line, # 0-based
+                    'char_end_in_line': char_end_in_line    # 0-based
                 })
-                current_pos = char_end
-                # match_num_debug += 1 # DEBUG
+                current_pos = char_start_full + len(self.query) # Advance position
         
         return matches
 
@@ -255,13 +244,9 @@ class Searcher:
         for i in range(start_line, end_line):
             line_number = i + 1 # 1-based line number for display
             line_content = content_lines[i]
-            prefix = f"{line_number: >4}: "
+            prefix = f"{line_number: >4}: " # Prefix already ends with a space
 
             if i == match_line_idx:
-                # Highlight the match: before_match + INDICATOR + match_text + INDICATOR + after_match
-                # For now, simple indication. Could use ANSI codes for terminal, or markdown for other outputs.
-                # Using simple `>>>` and `<<<` as indicators.
-                # Ensure match_start/end are within the line_content bounds
                 actual_match_start = min(match_start_char_in_line, len(line_content))
                 actual_match_end = min(match_end_char_in_line, len(line_content))
 
@@ -269,10 +254,14 @@ class Searcher:
                 match_text = line_content[actual_match_start:actual_match_end]
                 after_match = line_content[actual_match_end:]
 
-                # Ensure there are spaces around the highlight markers and handle spaces from BM/AM
-                snippet_lines.append(f"{prefix}{before_match.rstrip()} >>> {match_text} <<< {after_match.lstrip()}")
+                # Ensure one space around markers, but respect original spacing if at start/end of line parts
+                # If before_match is empty, no leading space for >>>. If it's not empty, ensure one space.
+                # If after_match is empty, no trailing space for <<<. If it's not empty, ensure one space.
+                
+                # Simpler: just insert the markers. The original spacing of before_match and after_match is preserved.
+                snippet_lines.append(f"{prefix}{before_match}>>>{match_text}<<<{after_match}")
             else:
-                snippet_lines.append(f"{prefix} {line_content}")
+                snippet_lines.append(f"{prefix}{line_content}") # Corrected: remove extra space here
         
         return "\n".join(snippet_lines)
 

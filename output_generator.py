@@ -1,4 +1,5 @@
 import json
+import sys
 
 class OutputGenerator:
     """Generates formatted output for search results and elaborations."""
@@ -38,7 +39,8 @@ class OutputGenerator:
         elif self.output_format == 'console':
             return self._format_console(processed_results)
         else:
-            print(f"Warning: Unknown output format '{self.output_format}'. Defaulting to console.")
+            # Ensure the warning for an unknown format is printed to sys.stderr
+            print(f"Warning: Unknown output format '{self.output_format}'. Defaulting to console.", file=sys.stderr)
             return self._format_console(processed_results)
 
     def _format_console(self, processed_results):
