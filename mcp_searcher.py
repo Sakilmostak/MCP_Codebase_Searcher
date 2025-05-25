@@ -3,10 +3,12 @@
 import argparse
 import os
 import sys
+import json # For 7.5, though OutputGenerator handles the actual JSON formatting
 
 # Assuming file_scanner.py and mcp_search.py are in the same directory or PYTHONPATH
 from file_scanner import FileScanner #, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES # Might need these if modifying defaults
 from mcp_search import Searcher
+from output_generator import OutputGenerator # Added for Task 7.5
 
 # Attempt to import ContextAnalyzer and config for elaboration feature
 try:
@@ -65,6 +67,20 @@ def main():
         "--include-hidden",
         action="store_true",
         help="Include hidden files and directories (starting with '.') in the scan."
+    )
+
+    # Output formatting arguments (Task 7.5)
+    parser.add_argument(
+        "--output-format",
+        choices=['console', 'json', 'md'],
+        default='console',
+        help="Format for the output (default: console)."
+    )
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        metavar="FILE",
+        help="Optional: File to write the output to. If not specified, output goes to stdout."
     )
 
     # Placeholder for future LLM elaboration
@@ -139,7 +155,7 @@ def main():
         print(f"Error initializing Searcher: {e}", file=sys.stderr)
         sys.exit(1)
 
-    results_found_count = 0
+    all_processed_results = [] # Store all results with their elaborations here (Task 7.5)
     context_analyzer = None
 
     # Initialize ContextAnalyzer once if elaboration is enabled
@@ -168,42 +184,59 @@ def main():
         matches_in_file = searcher.search_files([file_path]) 
         
         if matches_in_file:
-            for match in matches_in_file:
-                results_found_count += 1
-                print(f"\nMatch in: {match['file_path']}")
-                print(f"Line {match['line_number']}:")
-                print(f"{match['snippet']}")
+            for match_data in matches_in_file: # match_data is the dict from Searcher
+                processed_match = {
+                    'file_path': match_data['file_path'],
+                    'line_number': match_data['line_number'],
+                    'snippet': match_data['snippet'],
+                    'match_text': match_data['match_text'], # Assuming Searcher provides this
+                    'elaboration': None
+                }
 
                 if context_analyzer:
-                    print("\n    ✨ Elaborating...\n")
+                    # Print indicator to console only if output format is console
+                    if args.output_format == 'console':
+                        print(f"\n    ✨ Elaborating on match in {match_data['file_path']} line {match_data['line_number']}...", file=sys.stderr) 
+                    
                     full_content_for_elaboration = None
                     try:
-                        # Ensure we use the correct file path from the match dictionary
-                        with open(match['file_path'], 'r', encoding='utf-8', errors='replace') as f_content:
+                        with open(match_data['file_path'], 'r', encoding='utf-8', errors='replace') as f_content:
                             full_content_for_elaboration = f_content.read()
                     except Exception as e_read:
-                        print(f"    Warning: Could not read full file {match['file_path']} for elaboration context: {e_read}", file=sys.stderr)
+                        print(f"    Warning: Could not read full file {match_data['file_path']} for elaboration context: {e_read}", file=sys.stderr)
                     
                     try:
-                        elaboration = context_analyzer.elaborate_on_match(
-                            file_path=match['file_path'],
-                            line_number=match['line_number'],
-                            snippet=match['snippet'],
+                        elaboration_text = context_analyzer.elaborate_on_match(
+                            file_path=match_data['file_path'],
+                            line_number=match_data['line_number'],
+                            snippet=match_data['snippet'],
                             full_file_content=full_content_for_elaboration
                         )
-                        elaboration_lines = elaboration.split('\n')
-                        for el_line in elaboration_lines:
-                            print(f"    💡 {el_line}")
+                        processed_match['elaboration'] = elaboration_text
                     except Exception as e_elab:
-                        print(f"    Error during elaboration: {e_elab}", file=sys.stderr)
-                        print(f"    💡 Elaboration failed.")
-                    print("    --------------------") # Print separator after each elaboration
+                        print(f"    Error during elaboration for {match_data['file_path']} line {match_data['line_number']}: {e_elab}", file=sys.stderr)
+                        processed_match['elaboration'] = "Elaboration failed due to an error."
+                
+                all_processed_results.append(processed_match)
 
-    # Final summary
-    if results_found_count == 0:
-        print("No matches found.")
+    # Output generation (Task 7.5)
+    output_gen = OutputGenerator(output_format=args.output_format)
+    formatted_output_str = output_gen.generate_output(all_processed_results)
+
+    if args.output_file:
+        try:
+            with open(args.output_file, 'w', encoding='utf-8') as f_out:
+                f_out.write(formatted_output_str)
+            if args.output_format == 'console': # Provide feedback even if console output is redirected
+                 print(f"Output written to {args.output_file}")
+        except IOError as e:
+            print(f"Error writing to output file {args.output_file}: {e}", file=sys.stderr)
+            # Fallback to console if file write fails and original format was not console
+            if args.output_format != 'console':
+                print("\nFalling back to console output due to file error:", file=sys.stderr)
+                print(formatted_output_str)
     else:
-        print(f"\nFound {results_found_count} match(es) in total.")
+        print(formatted_output_str)
 
 if __name__ == "__main__":
     main() 
