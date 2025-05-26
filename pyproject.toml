@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp_codebase_searcher"
+version = "0.1.0"
+authors = [
+  { name="Sakilmostak", email="skmahim71@gmail.com" },
+]
+description = "A Python tool to scan codebases, search for text/regex patterns, and elaborate on findings using Google Gemini."
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Text Processing :: Indexing",
+    "Topic :: Utilities",
+]
+
+# Dependencies will be added in the next step
+dependencies = [
+    "python-dotenv",
+    "google-generativeai",
+]
+
+# py-modules IS REMOVED FROM HERE
+
+[project.scripts]
+# Entry points will be defined in a later subtask
+mcp-searcher = "mcp_searcher:main"
+
+[project.urls]
+"Homepage" = "https://github.com/example/mcp_codebase_searcher" # Placeholder
+"Bug Tracker" = "https://github.com/example/mcp_codebase_searcher/issues" # Placeholder
+
+[tool.setuptools]
+py-modules = [
+    "mcp_searcher",
+    "file_scanner",
+    "mcp_search",
+    "mcp_elaborate",
+    "output_generator",
+    "report_elaborator",
+    "config",
+]
+
+# Or, to be broader, one could use a wildcard if they were structured like a package, e.g., "mcp_searcher_tool*" 
