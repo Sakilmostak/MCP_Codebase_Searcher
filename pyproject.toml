@@ -11,9 +11,9 @@ authors = [
 description = "A Python tool to scan codebases, search for text/regex patterns, and elaborate on findings using Google Gemini."
 readme = "README.md"
 requires-python = ">=3.8"
+license = "MIT"
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -36,18 +36,21 @@ dependencies = [
 mcp-searcher = "mcp_searcher:main"
 
 [project.urls]
-"Homepage" = "https://github.com/example/mcp_codebase_searcher" # Placeholder
-"Bug Tracker" = "https://github.com/example/mcp_codebase_searcher/issues" # Placeholder
+"Homepage" = "https://github.com/sakilmostak/mcp-codebase-searcher" # Placeholder
+"Bug Tracker" = "https://github.com/sakilmostak/mcp-codebase-searcher/issues" # Placeholder
 
 [tool.setuptools]
+package-dir = {"" = "src"}
 py-modules = [
     "mcp_searcher",
-    "file_scanner",
-    "mcp_search",
-    "mcp_elaborate",
-    "output_generator",
-    "report_elaborator",
     "config",
+    "file_scanner",
+    "mcp_elaborate",
+    "mcp_search",
+    "output_generator",
+    "report_elaborator"
 ]
-
-# Or, to be broader, one could use a wildcard if they were structured like a package, e.g., "mcp_searcher_tool*" 
+# Using py-modules explicitly, so find is not strictly needed but can be kept for safety/explicitness
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["tests", "tests.*"] 
