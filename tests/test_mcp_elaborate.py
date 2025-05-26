@@ -9,24 +9,23 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# Mock config before importing mcp_elaborate
-# This is to control API key loading behavior during tests
-config_mock = MagicMock()
-config_mock.load_api_key.return_value = None # Default to no key from config
-sys.modules['src.config'] = config_mock
+# REMOVED: Global sys.modules mock for config
+# config_mock = MagicMock()
+# config_mock.load_api_key.return_value = None 
+# sys.modules['config'] = config_mock
 
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold, GenerationConfig
 from google.api_core.exceptions import GoogleAPIError, InternalServerError, ResourceExhausted, PermissionDenied
 from google.generativeai.types import BlockedPromptException
 
-# Now that config is mocked, we can import the module to be tested
-from src.mcp_elaborate import ContextAnalyzer 
+# Now that config is (conditionally) imported by mcp_elaborate, we can import the module to be tested
+from src.mcp_elaborate import ContextAnalyzer
 
 # Helper to reset mocks that might persist across tests, especially for module-level mocks
 @patch.dict(os.environ, {}, clear=True) # Clear os.environ for each test
-@patch('src.config.load_api_key', return_value=None) # Reset config.load_api_key for each test
-def reset_mocks(mock_config_load_api_key):
+# We will patch 'src.mcp_elaborate.config.load_api_key' if needed by a specific test directly
+def reset_mocks():
     pass # This function is just a vehicle for the decorators
 
 class TestContextAnalyzer(unittest.TestCase):
@@ -52,70 +51,79 @@ class TestContextAnalyzer(unittest.TestCase):
         self.addCleanup(self.patcher_genai_configure.stop)
 
     def tearDown(self):
-        # This ensures that mocks started with self.patcher_*.start() are stopped even if setUp fails.
-        # self.addCleanup already handles this for normally completed tests.
-        # If we add more patchers in setUp that are not using addCleanup, stop them here.
         pass 
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "env_key"}, clear=True)
-    @patch('src.config.load_api_key', return_value=None)
-    def test_init_api_key_from_env(self, mock_load_api_key):
+    # No need to patch config.load_api_key if env key is present and used first
+    def test_init_api_key_from_env(self):
         analyzer = ContextAnalyzer()
         self.assertEqual(analyzer.api_key, "env_key")
         self.mock_genai_configure.assert_called_once_with(api_key="env_key")
         self.MockGenerativeModel.assert_called_once()
         self.assertIsNotNone(analyzer.model)
 
-    @patch('src.config.load_api_key', return_value="config_key")
+    @patch('src.mcp_elaborate.config') # Patch 'config' as seen by mcp_elaborate
     @patch.dict(os.environ, {}, clear=True)
-    def test_init_api_key_from_config(self, mock_load_api_key):
+    def test_init_api_key_from_config(self, mock_config_module):
+        mock_config_module.load_api_key.return_value = "config_key"
+        # Ensure the config module itself is seen as existing
+        mock_config_module.__name__ = "config" # Emulate a real module for hasattr checks
+
         analyzer = ContextAnalyzer(api_key=None) # Explicitly pass None to prioritize config/env
         self.assertEqual(analyzer.api_key, "config_key")
-        mock_load_api_key.assert_called_once()
+        mock_config_module.load_api_key.assert_called_once()
         self.mock_genai_configure.assert_called_once_with(api_key="config_key")
         self.MockGenerativeModel.assert_called_once()
         self.assertIsNotNone(analyzer.model)
 
-    @patch.dict(os.environ, {}, clear=True) # Ensure no env key
-    @patch('src.config.load_api_key', return_value=None) # Ensure no config key
-    def test_init_api_key_from_param(self, mock_load_api_key):
-        analyzer = ContextAnalyzer(api_key="param_key")
-        self.assertEqual(analyzer.api_key, "param_key")
-        self.mock_genai_configure.assert_called_once_with(api_key="param_key")
-        self.MockGenerativeModel.assert_called_once()
-        self.assertIsNotNone(analyzer.model)
+    @patch.dict(os.environ, {}, clear=True) # Keep this one as a decorator for now
+    def test_init_api_key_from_param(self): # Remove the problematic argument
+        with patch('src.mcp_elaborate.config', None) as mock_config_module_is_none: # Use as context manager
+            self.assertIsNone(mock_config_module_is_none) 
+
+            analyzer = ContextAnalyzer(api_key="param_key")
+            self.assertEqual(analyzer.api_key, "param_key")
+            self.mock_genai_configure.assert_called_once_with(api_key="param_key")
+            self.MockGenerativeModel.assert_called_once()
+            self.assertIsNotNone(analyzer.model)
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "env_key_override"}, clear=True)
-    @patch('src.config.load_api_key', return_value="config_key")
-    def test_init_api_key_priority_param_over_env_over_config(self, mock_load_api_key):
+    @patch('src.mcp_elaborate.config')
+    def test_init_api_key_priority_param_over_env_over_config(self, mock_config_module):
+        mock_config_module.load_api_key.return_value = "config_key"
+        mock_config_module.__name__ = "config"
+
         # Param has highest priority
         analyzer_param = ContextAnalyzer(api_key="param_key_wins")
         self.assertEqual(analyzer_param.api_key, "param_key_wins")
         self.mock_genai_configure.assert_called_with(api_key="param_key_wins")
-        mock_load_api_key.assert_not_called() # Config should not be called if param is present
+        mock_config_module.load_api_key.assert_not_called() # Config should not be called if param is present
 
         self.mock_genai_configure.reset_mock() # Reset for next assert
         # Env key if param is None
         analyzer_env = ContextAnalyzer(api_key=None)
         self.assertEqual(analyzer_env.api_key, "env_key_override") # Should pick env key
         self.mock_genai_configure.assert_called_with(api_key="env_key_override")
-        mock_load_api_key.assert_not_called() # Config still not called if env is present
+        mock_config_module.load_api_key.assert_not_called() # Config still not called if env is present
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('src.config.load_api_key', return_value=None)
-    def test_init_no_api_key(self, mock_load_api_key):
-        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
-            analyzer = ContextAnalyzer() # No key via param, env, or config
-            self.assertIsNone(analyzer.api_key)
-            self.assertIsNone(analyzer.model) # Model should not be initialized
-            self.mock_genai_configure.assert_not_called()
-            self.MockGenerativeModel.assert_not_called()
-            self.assertIn("error: contextanalyzer initialized without an api key. elaboration will not function.", mock_stderr.getvalue().lower())
+    def test_init_no_api_key(self):
+        with patch('src.mcp_elaborate.config', None) as mock_config_is_none:
+            self.assertIsNone(mock_config_is_none)
+            with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+                analyzer = ContextAnalyzer() # No key via param, env, or config
+                self.assertIsNone(analyzer.api_key)
+                self.assertIsNone(analyzer.model) # Model should not be initialized
+                self.mock_genai_configure.assert_not_called()
+                self.MockGenerativeModel.assert_not_called()
+                # Check for the warning about config import failure too if it's part of the logic
+                # self.assertIn("warning: could not import 'config' module", mock_stderr.getvalue().lower())
+                self.assertIn("error: contextanalyzer initialized without an api key. elaboration will not function.", mock_stderr.getvalue().lower())
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "dummy_key"}, clear=True)
-    @patch('src.config.load_api_key', return_value=None)
+    # No need to patch config if env key is used
     @patch('google.generativeai.GenerativeModel', side_effect=Exception("Model init failed"))
-    def test_init_model_initialization_failure(self, mock_gm_fail, mock_load_api_key):
+    def test_init_model_initialization_failure(self, mock_gm_fail):
         with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             analyzer = ContextAnalyzer()
             self.assertEqual(analyzer.api_key, "dummy_key")
@@ -129,11 +137,16 @@ class TestContextAnalyzer(unittest.TestCase):
         self.assertEqual(elaboration, "Successful elaboration.")
         self.mock_generative_model_instance.generate_content.assert_called_once()
 
-    def test_elaborate_on_match_model_not_initialized(self):
+    @patch.dict(os.environ, {}, clear=True) # Ensure no env key for this specific test
+    @patch('src.mcp_elaborate.config') # Patch config, make its load_api_key return None
+    def test_elaborate_on_match_model_not_initialized(self, mock_config_module):
+        mock_config_module.load_api_key.return_value = None
+        mock_config_module.__name__ = "config" # Make it look like a module
         # This test assumes __init__ has already printed to stderr if no API key was found.
         # Here, we verify that elaborate_on_match returns the correct error string
         # and does NOT print further to stderr for this specific condition.
         analyzer = ContextAnalyzer() # No API key, so model is None. __init__ would have printed.
+        self.assertIsNone(analyzer.api_key) # Add this assertion for clarity
         self.assertIsNone(analyzer.model)
         
         with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr_elaborate_call:

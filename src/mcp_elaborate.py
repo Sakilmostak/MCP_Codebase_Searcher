@@ -9,10 +9,11 @@ import google.api_core.exceptions # For more specific API error handling
 
 # Direct import, as config.py is installed as a top-level module
 try:
-    import config 
+    from . import config
 except ImportError as e:
-    print(f"Warning: Could not import 'config' module. API key loading might rely on direct environment variables. Error: {e}", file=sys.stderr)
+    print(f"Warning: Could not import '.'config' module. API key loading might rely on direct environment variables. Error: {e}", file=sys.stderr)
     config = None # Allow script to continue if API key is passed directly or via env
+    # raise # Re-raise the ImportError to make it visible during tests
 
 class ContextAnalyzer:
     """
