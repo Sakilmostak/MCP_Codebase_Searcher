@@ -26,66 +26,11 @@ pip install mcp-codebase-searcher
 ```
 This will download and install the latest stable version and its dependencies. Ensure your pip is up to date (`pip install --upgrade pip`).
 
-### Troubleshooting: Command Not Found after `pip install`
-
-If you install `mcp-codebase-searcher` using `pip install mcp-codebase-searcher` (especially with `pip install --user mcp-codebase-searcher` or if your global site-packages isn't writable), `pip` might install the script `mcp-searcher` to a directory that is not in your system's `PATH`.
-
-You will see a warning during installation similar to:
-```
-WARNING: The script mcp-searcher is installed in '/Users/your_username/Library/Python/X.Y/bin' which is not on PATH.
-Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
-```
-(The exact path will vary based on your operating system and Python version.)
-
-If the `mcp-searcher` command is not found after installation:
-
-1.  **Identify the script location:** Note the directory mentioned in the `pip` warning (e.g., `/Users/your_username/Library/Python/X.Y/bin` on macOS, or `~/.local/bin` on Linux).
-
-2.  **Add the directory to your PATH:**
-    *   **For Bash users (common on Linux and older macOS):**
-        Edit your `~/.bashrc` or `~/.bash_profile` file:
-        ```bash
-        nano ~/.bashrc  # or ~/.bash_profile
-        ```
-        Add the following line at the end, replacing `/path/to/your/python/scripts` with the actual directory from the warning:
-        ```bash
-        export PATH="/path/to/your/python/scripts:$PATH"
-        ```
-        Save the file, then apply the changes by running `source ~/.bashrc` (or `source ~/.bash_profile`) or by opening a new terminal.
-
-    *   **For Zsh users (common on newer macOS):**
-        Edit your `~/.zshrc` file:
-        ```bash
-        nano ~/.zshrc
-        ```
-        Add the following line at the end, replacing `/path/to/your/python/scripts` with the actual directory from the warning:
-        ```bash
-        export PATH="/path/to/your/python/scripts:$PATH"
-        ```
-        Save the file, then apply the changes by running `source ~/.zshrc` or by opening a new terminal.
-
-    *   **For Fish shell users:**
-        ```fish
-        set -U fish_user_paths /path/to/your/python/scripts $fish_user_paths
-        ```
-        This command updates your user paths persistently. Open a new terminal for the changes to take effect.
-
-    *   **For Windows users:**
-        You can add the directory to your PATH environment variable through the System Properties:
-        1.  Search for "environment variables" in the Start Menu and select "Edit the system environment variables".
-        2.  In the System Properties window, click the "Environment Variables..." button.
-        3.  Under "User variables" (or "System variables" if you want it for all users), find the variable named `Path` and select it.
-        4.  Click "Edit...".
-        5.  Click "New" and paste the directory path (e.g., `C:\\Users\\YourUser\\AppData\\Roaming\\Python\\PythonXY\\Scripts`).
-        6.  Click "OK" on all open dialogs. You may need to open a new Command Prompt or PowerShell window for the changes to take effect.
-
-After updating your `PATH`, the `mcp-searcher` command should be accessible from any directory in your terminal.
-
 **2. API Key (for Elaboration):**
 
 To use the elaboration feature, you need a Google API key for Gemini. You can provide it via:
 *   The `--api-key` argument when using the `elaborate` command.
-*   A JSON configuration file specified with `--config-file` (containing `{\"GOOGLE_API_KEY\": \"YOUR_KEY\"}`).
+*   A JSON configuration file specified with `--config-file` (containing `{\\"GOOGLE_API_KEY\\": \\"YOUR_KEY\\"}`).
 *   An environment variable `GOOGLE_API_KEY`.
 
 The API key is sourced with the following precedence: `--api-key` argument > `--config-file` > `GOOGLE_API_KEY` environment variable.
@@ -109,7 +54,7 @@ If you want to develop the tool or install it manually from the source code:
 *   **Create and activate a virtual environment:**
     ```bash
     python3 -m venv venv
-    source venv/bin/activate  # On Windows use `venv\\Scripts\\activate`
+    source venv/bin/activate  # On Windows use `venv\\\\Scripts\\\\activate`
     ```
 
 *   **Install in editable mode:**
@@ -171,12 +116,12 @@ mcp-searcher search "your_query" path/to/search [--regex] [--case-sensitive] [--
 
 2.  Search for Python function definitions (e.g., `def my_function(`) using a regular expression in all `.py` files within the current directory (`.`) and its subdirectories:
     ```bash
-    mcp-searcher search "^\s*def\s+\w+\s*\(.*\):" . --regex --exclude-files "!*.py" # Assumes FileScanner handles includes or user pre-filters paths if !*.py is not directly supported for exclusion.
+    mcp-searcher search "^\\s*def\\s+\\w+\\s*\\(.*\\):" . --regex --exclude-files "!*.py" # Assumes FileScanner handles includes or user pre-filters paths if !*.py is not directly supported for exclusion.
     # A better way if FileScanner doesn't support include patterns in exclude-files:
     # Find .py files first, then pass to mcp-searcher, or rely on mcp-searcher scanning all and then filtering if it did.
     # For this tool, it scans all non-excluded, so to search only .py, you'd typically not exclude others unless they are binaries etc.
     # Corrected Example for just regex:
-    mcp-searcher search "^\s*def\s+\w+\s*\(.*\):" . --regex
+    mcp-searcher search "^\\s*def\\s+\\w+\\s*\\(.*\\):" . --regex
     ```
     *Note: Ensure your regex is quoted correctly for your shell, especially if it contains special characters.*
 
@@ -211,7 +156,7 @@ mcp-searcher elaborate --report-file path/to/report.json --finding-id INDEX [--a
     mcp-searcher elaborate --report-file search_results.json --finding-id 2 --api-key "AIzaSyXXXXXXXXXXXXXXXXXXX" --context-lines 15
     ```
 
-3.  Elaborate on a finding from `project_report.json`, using an API key stored in a custom configuration file named `my_gemini_config.json` located in the user's home directory:
+3.  Elaborate on a finding from `project_report.json`, using an API key stored in a custom configuration file named `my_gemini_config.json` located in the user\'s home directory:
     ```bash
     mcp-searcher elaborate --report-file project_report.json --finding-id 5 --config-file ~/.my_gemini_config.json
     ```
@@ -246,12 +191,12 @@ The `search` command can output results in several formats using the `--output-f
     ```json
     [
       {
-        "file_path": "/path/to/your/file.py",
-        "line_number": 42,
-        "match_text": "matched text",
-        "snippet": "  Context line 1 before match\n  >>>The line with the matched text<<<\n  Context line 1 after match",
-        "char_start_in_line": 25, 
-        "char_end_in_line": 37
+        \"file_path\": \"/path/to/your/file.py\",
+        \"line_number\": 42,
+        \"match_text\": \"matched text\",
+        \"snippet\": \"  Context line 1 before match\\n  >>>The line with the matched text<<<\\n  Context line 1 after match\",
+        \"char_start_in_line\": 25, 
+        \"char_end_in_line\": 37
       }
       // ... more matches ...
     ]
@@ -312,12 +257,61 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 Here are some common issues and how to resolve them:
 
-*   **Command not found (`mcp-searcher: command not found`):**
-    *   If you installed via `pip install mcp-codebase-searcher`:
-        *   Ensure your virtual environment (if used) is activated.
-        *   Make sure the `bin` (or `Scripts` on Windows) directory of your Python installation or virtual environment is in your system's `PATH`. Pip should handle this, but sometimes PATH issues can occur.
-    *   If installed in editable mode (`pip install -e .`):
-        *   Ensure you have activated the virtual environment where the package was installed: `source venv/bin/activate`.
+*   **Command Not Found after `pip install` (`mcp-searcher: command not found`):**
+
+    If you install `mcp-codebase-searcher` using `pip install mcp-codebase-searcher` (especially with `pip install --user mcp-codebase-searcher` or if your global site-packages isn't writable), `pip` might install the script `mcp-searcher` to a directory that is not in your system's `PATH`.
+
+    You will see a warning during installation similar to:
+    ```
+    WARNING: The script mcp-searcher is installed in '/Users/your_username/Library/Python/X.Y/bin' which is not on PATH.
+    Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+    ```
+    (The exact path will vary based on your operating system and Python version.)
+
+    If the `mcp-searcher` command is not found after installation:
+
+    1.  **Identify the script location:** Note the directory mentioned in the `pip` warning (e.g., `/Users/your_username/Library/Python/X.Y/bin` on macOS, or `~/.local/bin` on Linux).
+
+    2.  **Add the directory to your PATH:**
+        *   **For Bash users (common on Linux and older macOS):**
+            Edit your `~/.bashrc` or `~/.bash_profile` file:
+            ```bash
+            nano ~/.bashrc  # or ~/.bash_profile
+            ```
+            Add the following line at the end, replacing `/path/to/your/python/scripts` with the actual directory from the warning:
+            ```bash
+            export PATH="/path/to/your/python/scripts:$PATH"
+            ```
+            Save the file, then apply the changes by running `source ~/.bashrc` (or `source ~/.bash_profile`) or by opening a new terminal.
+
+        *   **For Zsh users (common on newer macOS):**
+            Edit your `~/.zshrc` file:
+            ```bash
+            nano ~/.zshrc
+            ```
+            Add the following line at the end, replacing `/path/to/your/python/scripts` with the actual directory from the warning:
+            ```bash
+            export PATH="/path/to/your/python/scripts:$PATH"
+            ```
+            Save the file, then apply the changes by running `source ~/.zshrc` or by opening a new terminal.
+
+        *   **For Fish shell users:**
+            ```fish
+            set -U fish_user_paths /path/to/your/python/scripts $fish_user_paths
+            ```
+            This command updates your user paths persistently. Open a new terminal for the changes to take effect.
+
+        *   **For Windows users:**
+            You can add the directory to your PATH environment variable through the System Properties:
+            1.  Search for "environment variables" in the Start Menu and select "Edit the system environment variables".
+            2.  In the System Properties window, click the "Environment Variables..." button.
+            3.  Under "User variables" (or "System variables" if you want it for all users), find the variable named `Path` and select it.
+            4.  Click "Edit...".
+            5.  Click "New" and paste the directory path (e.g., `C:\\\\Users\\\\YourUser\\\\AppData\\\\Roaming\\\\Python\\\\PythonXY\\\\Scripts`).
+            6.  Click "OK" on all open dialogs. You may need to open a new Command Prompt or PowerShell window for the changes to take effect.
+
+    After updating your `PATH`, the `mcp-searcher` command should be accessible from any directory in your terminal.
+
 *   **ModuleNotFoundError (e.g., `No module named 'google_generativeai'`):**
     *   This usually indicates an issue with the installation or virtual environment.
     *   If installed via `pip install mcp-codebase-searcher`, dependencies should be handled automatically. Ensure you are in the correct virtual environment. Try `pip install --force-reinstall mcp-codebase-searcher`.
@@ -336,8 +330,8 @@ Here are some common issues and how to resolve them:
     *   Ensure you have read permissions for the files/directories you are trying to search, and write permissions if using `--output-file` to a restricted location.
 
 *   **Invalid Regular Expression (for `search --regex`):**
-    *   The tool will output an error if the regex pattern is invalid. Test your regex pattern with online tools or Python's `re` module separately.
-    *   Remember to quote your regex pattern properly in the shell, especially if it contains special characters like `*`, `(`, `)`, `|`, etc. Single quotes (`'pattern'`) are often safer than double quotes in bash/zsh for complex patterns.
+    *   The tool will output an error if the regex pattern is invalid. Test your regex pattern with online tools or Python\'s `re` module separately.
+    *   Remember to quote your regex pattern properly in the shell, especially if it contains special characters like `*`, `(`, `)`, `|`, etc. Single quotes (`\'pattern\'`) are often safer than double quotes in bash/zsh for complex patterns.
 
 *   **No Matches Found:**
     *   Verify your query term or regex pattern. Try a simpler, broader query first.
@@ -351,8 +345,8 @@ Here are some common issues and how to resolve them:
     *   Error messages like "Could not decode JSON from report file" or "Finding ID ... is out of range" point to issues with the report file or the provided ID.
 
 *   **Shell Quoting Issues for Query:**
-    *   If your search query contains spaces or special shell characters (e.g., `!`, `*`, `$`, `&`), ensure it's properly quoted. Single quotes (`'your query'`) are generally safest to prevent shell expansion.
+    *   If your search query contains spaces or special shell characters (e.g., `!`, `*`, `$`, `&`), ensure it\'s properly quoted. Single quotes (`\'your query\'`) are generally safest to prevent shell expansion.
     ```bash
-    mcp-searcher search 'my exact phrase with spaces!' . 
-    mcp-searcher search 'pattern_with_$(dollar_sign_and_parens)' . --regex
+    mcp-searcher search \'my exact phrase with spaces!\' . 
+    mcp-searcher search \'pattern_with_$(dollar_sign_and_parens)\' . --regex
     ``` 
