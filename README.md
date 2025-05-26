@@ -26,6 +26,61 @@ pip install mcp-codebase-searcher
 ```
 This will download and install the latest stable version and its dependencies. Ensure your pip is up to date (`pip install --upgrade pip`).
 
+### Troubleshooting: Command Not Found after `pip install`
+
+If you install `mcp-codebase-searcher` using `pip install mcp-codebase-searcher` (especially with `pip install --user mcp-codebase-searcher` or if your global site-packages isn't writable), `pip` might install the script `mcp-searcher` to a directory that is not in your system's `PATH`.
+
+You will see a warning during installation similar to:
+```
+WARNING: The script mcp-searcher is installed in '/Users/your_username/Library/Python/X.Y/bin' which is not on PATH.
+Consider adding this directory to PATH or, if you prefer to suppress this warning, use --no-warn-script-location.
+```
+(The exact path will vary based on your operating system and Python version.)
+
+If the `mcp-searcher` command is not found after installation:
+
+1.  **Identify the script location:** Note the directory mentioned in the `pip` warning (e.g., `/Users/your_username/Library/Python/X.Y/bin` on macOS, or `~/.local/bin` on Linux).
+
+2.  **Add the directory to your PATH:**
+    *   **For Bash users (common on Linux and older macOS):**
+        Edit your `~/.bashrc` or `~/.bash_profile` file:
+        ```bash
+        nano ~/.bashrc  # or ~/.bash_profile
+        ```
+        Add the following line at the end, replacing `/path/to/your/python/scripts` with the actual directory from the warning:
+        ```bash
+        export PATH="/path/to/your/python/scripts:$PATH"
+        ```
+        Save the file, then apply the changes by running `source ~/.bashrc` (or `source ~/.bash_profile`) or by opening a new terminal.
+
+    *   **For Zsh users (common on newer macOS):**
+        Edit your `~/.zshrc` file:
+        ```bash
+        nano ~/.zshrc
+        ```
+        Add the following line at the end, replacing `/path/to/your/python/scripts` with the actual directory from the warning:
+        ```bash
+        export PATH="/path/to/your/python/scripts:$PATH"
+        ```
+        Save the file, then apply the changes by running `source ~/.zshrc` or by opening a new terminal.
+
+    *   **For Fish shell users:**
+        ```fish
+        set -U fish_user_paths /path/to/your/python/scripts $fish_user_paths
+        ```
+        This command updates your user paths persistently. Open a new terminal for the changes to take effect.
+
+    *   **For Windows users:**
+        You can add the directory to your PATH environment variable through the System Properties:
+        1.  Search for "environment variables" in the Start Menu and select "Edit the system environment variables".
+        2.  In the System Properties window, click the "Environment Variables..." button.
+        3.  Under "User variables" (or "System variables" if you want it for all users), find the variable named `Path` and select it.
+        4.  Click "Edit...".
+        5.  Click "New" and paste the directory path (e.g., `C:\\Users\\YourUser\\AppData\\Roaming\\Python\\PythonXY\\Scripts`).
+        6.  Click "OK" on all open dialogs. You may need to open a new Command Prompt or PowerShell window for the changes to take effect.
+
+After updating your `PATH`, the `mcp-searcher` command should be accessible from any directory in your terminal.
+
 **2. API Key (for Elaboration):**
 
 To use the elaboration feature, you need a Google API key for Gemini. You can provide it via:
