@@ -17,41 +17,72 @@ MCP Codebase Searcher is a Python tool designed to scan codebases, search for te
 
 This project uses Python 3.8+.
 
-1.  **Clone the repository (if applicable):**
+**1. Install from PyPI (Recommended):**
+
+The easiest way to install `mcp-codebase-searcher` is from PyPI using pip:
+
+```bash
+pip install mcp-codebase-searcher
+```
+This will download and install the latest stable version and its dependencies. Ensure your pip is up to date (`pip install --upgrade pip`).
+
+**2. API Key (for Elaboration):**
+
+To use the elaboration feature, you need a Google API key for Gemini. You can provide it via:
+*   The `--api-key` argument when using the `elaborate` command.
+*   A JSON configuration file specified with `--config-file` (containing `{\"GOOGLE_API_KEY\": \"YOUR_KEY\"}`).
+*   An environment variable `GOOGLE_API_KEY`.
+
+The API key is sourced with the following precedence: `--api-key` argument > `--config-file` > `GOOGLE_API_KEY` environment variable.
+
+If using environment variables, you might set it in your shell profile or create a `.env` file in your project directory *when you are using the tool* (not for installation of the tool itself):
+```
+GOOGLE_API_KEY="YOUR_API_KEY_HERE"
+```
+The tool uses `python-dotenv` to load this if available in the working directory.
+
+**3. Development / Manual Installation (from source):**
+
+If you want to develop the tool or install it manually from the source code:
+
+*   **Clone the repository:**
     ```bash
-    git clone <repository_url>
+    git clone https://github.com/Sakilmostak/mcp_codebase_searcher.git # Replace with actual URL
     cd mcp_codebase_searcher
     ```
 
-2.  **Create and activate a virtual environment:**
+*   **Create and activate a virtual environment:**
     ```bash
     python3 -m venv venv
-    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    source venv/bin/activate  # On Windows use `venv\\Scripts\\activate`
     ```
 
-3.  **Install the package:**
-    Once the package is built (see Building section below), you can install it using pip:
-    ```bash
-    pip install dist/mcp_codebase_searcher-*.whl 
-    ```
-    Alternatively, for development, install in editable mode from the project root:
+*   **Install in editable mode:**
+    For development, install the package in editable mode from the project root. This allows your changes to be reflected immediately.
     ```bash
     pip install -e .
     ```
-
-4.  **API Key (for Elaboration):**
-    To use the elaboration feature, you need a Google API key for Gemini. You can provide it via:
-    *   The `--api-key` argument when using the `elaborate` command.
-    *   A JSON configuration file specified with `--config-file` (containing `{"GOOGLE_API_KEY": "YOUR_KEY"}`).
-    *   An environment variable `GOOGLE_API_KEY`.
-    *   A `config.py` file in the project root (if running from source) that has a `load_api_key()` function returning the key.
-
-    The API key is sourced with the following precedence: `--api-key` argument > `--config-file` > `GOOGLE_API_KEY` environment variable > `config.py` module.
-
-    Create a `.env` file in the project root for local development if using environment variables:
+    Alternatively, to install from a built wheel (after building it yourself, see [Building](#building) section):
+    ```bash
+    pip install dist/mcp_codebase_searcher-*.whl
     ```
-    GOOGLE_API_KEY="YOUR_API_KEY_HERE"
-    ```
+
+## Project Structure
+
+The project follows a standard Python packaging layout:
+
+*   `src/`: Contains the main application source code for the `mcp_codebase_searcher` package.
+    *   `mcp_searcher.py`: Main CLI entry point and argument parsing.
+    *   `file_scanner.py`: Module for scanning directories and finding files.
+    *   `mcp_search.py`: Core search logic.
+    *   `mcp_elaborate.py`: Handles LLM interaction for context analysis.
+    *   `report_elaborator.py`: Logic for elaborating on findings from a report.
+    *   `output_generator.py`: Formats and generates output.
+    *   `config.py`: Handles API key loading (though primarily used when running from source before full packaging, now mostly superseded by environment variables or direct CLI args for the installed package).
+*   `tests/`: Contains all unit and integration tests.
+*   `pyproject.toml`: Build system configuration and package metadata.
+*   `README.md`: This file.
+*   `LICENSE`: Project license.
 
 ## Usage
 
@@ -192,6 +223,8 @@ The `search` command can output results in several formats using the `--output-f
 
 ## Building
 
+This section is primarily for developers contributing to the project or those who wish to build the package from source manually. If you just want to use the tool, please use the [PyPI installation method](#installation) above.
+
 To build the package (wheel and source distribution):
 
 1.  Ensure you have the necessary build tools:
@@ -225,19 +258,20 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 Here are some common issues and how to resolve them:
 
 *   **Command not found (`mcp-searcher: command not found`):**
-    *   Ensure you have activated the virtual environment where the package was installed: `source venv/bin/activate` (or `venv\Scripts\activate` on Windows).
-    *   If installed in editable mode (`pip install -e .`), ensure you are in the project root or that the project root is in your `PYTHONPATH`.
-    *   If installed via wheel, ensure the virtual environment's `bin` (or `Scripts`) directory is in your system's `PATH`.
-
+    *   If you installed via `pip install mcp-codebase-searcher`:
+        *   Ensure your virtual environment (if used) is activated.
+        *   Make sure the `bin` (or `Scripts` on Windows) directory of your Python installation or virtual environment is in your system's `PATH`. Pip should handle this, but sometimes PATH issues can occur.
+    *   If installed in editable mode (`pip install -e .`):
+        *   Ensure you have activated the virtual environment where the package was installed: `source venv/bin/activate`.
 *   **ModuleNotFoundError (e.g., `No module named 'google_generativeai'`):**
-    *   Make sure all dependencies are installed correctly within your active virtual environment. Try reinstalling: `pip install --force-reinstall -r requirements.txt` (if you have one from source) or `pip install --force-reinstall mcp-codebase-searcher` (if from wheel, though direct wheel reinstallation might be `pip install --force-reinstall dist/mcp_codebase_searcher-*.whl`). For an installed package, dependencies should be handled automatically.
+    *   This usually indicates an issue with the installation or virtual environment.
+    *   If installed via `pip install mcp-codebase-searcher`, dependencies should be handled automatically. Ensure you are in the correct virtual environment. Try `pip install --force-reinstall mcp-codebase-searcher`.
     *   Ensure you are using the Python interpreter from your activated virtual environment.
 
 *   **API Key Errors (for `elaborate` command):**
-    *   **"Could not initialize GenerativeModel... API key not found."**: This means the Google API key was not found through any of the supported methods (argument, config file, environment variable, `config.py`). Double-check the [API Key section under Installation](#api-key-for-elaboration).
+    *   **"Could not initialize GenerativeModel... API key not found."**: This means the Google API key was not found through any of the supported methods (argument, config file, environment variable). Double-check the [API Key section under Installation](#2-api-key-for-elaboration).
     *   **"Could not initialize GenerativeModel... Invalid API key."**: The key was found but is incorrect or unauthorized for the Gemini API.
-    *   Ensure your `.env` file (if used) is in the correct location (project root if running from source) and correctly formatted (`GOOGLE_API_KEY="YOUR_KEY"`).
-    *   Verify that the environment variable `GOOGLE_API_KEY` is set and exported in your current shell session if not using an `.env` file with `python-dotenv` support.
+    *   Verify that the environment variable `GOOGLE_API_KEY` is set and exported in your current shell session. If using a `.env` file, ensure it is in the directory where you are running the `mcp-searcher` command.
 
 *   **File/Directory Not Found (for `search` or `elaborate --report-file`):**
     *   Double-check that the paths provided to the `search` command or the `--report-file` argument are correct and accessible.
