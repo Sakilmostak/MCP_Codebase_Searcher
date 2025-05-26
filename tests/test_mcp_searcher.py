@@ -11,7 +11,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from mcp_searcher import main # Import the main function to be tested
+from src.mcp_searcher import main # Import the main function to be tested
 
 class TestMcpSearcher(unittest.TestCase):
     def setUp(self):
@@ -58,7 +58,7 @@ class TestMcpSearcher(unittest.TestCase):
 
     # --- Tests for the 'elaborate' command ---
 
-    @patch('mcp_searcher.elaborate_finding')
+    @patch('src.mcp_searcher.elaborate_finding')
     def test_elaborate_command_success(self, mock_elaborate_finding):
         mock_elaborate_finding.return_value = "Mocked elaboration successful!"
         
@@ -83,7 +83,7 @@ class TestMcpSearcher(unittest.TestCase):
             context_window_lines=10 # Default
         )
 
-    @patch('mcp_searcher.elaborate_finding')
+    @patch('src.mcp_searcher.elaborate_finding')
     def test_elaborate_command_with_api_key_and_context_lines(self, mock_elaborate_finding):
         mock_elaborate_finding.return_value = "Elaboration with params."
         report_path = os.path.join(self.test_dir, 'report_params.json')
@@ -109,7 +109,7 @@ class TestMcpSearcher(unittest.TestCase):
             context_window_lines=5
         )
 
-    @patch('mcp_searcher.elaborate_finding')
+    @patch('src.mcp_searcher.elaborate_finding')
     def test_elaborate_command_finding_returns_error(self, mock_elaborate_finding):
         mock_elaborate_finding.return_value = "Error: Mocked finding not found."
         report_path = os.path.join(self.test_dir, 'report_error.json')
@@ -151,7 +151,7 @@ class TestMcpSearcher(unittest.TestCase):
         self.assertNotEqual(exit_code2, 0)
         self.assertIn("the following arguments are required: --finding-id", stderr2.lower())
 
-    @patch('mcp_searcher.elaborate_finding')
+    @patch('src.mcp_searcher.elaborate_finding')
     @patch('json.load') # Also mock json.load for precise control over config loading
     def test_elaborate_command_config_file_logic(self, mock_json_load, mock_elaborate_finding):
         mock_elaborate_finding.return_value = "Config key used."

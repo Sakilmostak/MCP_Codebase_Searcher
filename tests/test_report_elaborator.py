@@ -11,8 +11,8 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from report_elaborator import elaborate_finding
-# We will mock ContextAnalyzer from mcp_elaborate
+from src.report_elaborator import elaborate_finding
+# We will mock ContextAnalyzer from src.mcp_elaborate
 
 class TestReportElaborator(unittest.TestCase):
     def setUp(self):
@@ -48,7 +48,7 @@ class TestReportElaborator(unittest.TestCase):
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
 
-    @patch('report_elaborator.ContextAnalyzer')
+    @patch('src.report_elaborator.ContextAnalyzer')
     def test_elaborate_finding_success(self, MockContextAnalyzer):
         mock_analyzer_instance = MockContextAnalyzer.return_value
         mock_analyzer_instance.model = True # Simulate successful model init
@@ -103,8 +103,8 @@ class TestReportElaborator(unittest.TestCase):
         result = elaborate_finding(faulty_report_path, 0)
         self.assertTrue(result.startswith("Error: Finding at index 0 has an invalid structure"))
 
-    @patch('report_elaborator.ContextAnalyzer')
-    @patch('report_elaborator.sys.stderr', new_callable=io.StringIO)
+    @patch('src.report_elaborator.ContextAnalyzer')
+    @patch('src.report_elaborator.sys.stderr', new_callable=io.StringIO)
     def test_source_file_not_found_for_finding(self, mock_stderr, MockContextAnalyzer):
         mock_analyzer_instance = MockContextAnalyzer.return_value
         mock_analyzer_instance.model = True
@@ -124,7 +124,7 @@ class TestReportElaborator(unittest.TestCase):
         )
         self.assertIn(f"Warning: Source file '{expected_finding['file_path']}' for finding 1 not found", mock_stderr.getvalue())
 
-    @patch('report_elaborator.ContextAnalyzer')
+    @patch('src.report_elaborator.ContextAnalyzer')
     def test_context_analyzer_init_fails(self, MockContextAnalyzer):
         mock_analyzer_instance = MockContextAnalyzer.return_value
         mock_analyzer_instance.model = None # Simulate model init failure (e.g. no API key)
@@ -134,7 +134,7 @@ class TestReportElaborator(unittest.TestCase):
         self.assertEqual(result, "Error: ContextAnalyzer model could not be initialized. Cannot elaborate.")
         MockContextAnalyzer.assert_called_once_with(api_key=None)
 
-    @patch('report_elaborator.ContextAnalyzer')
+    @patch('src.report_elaborator.ContextAnalyzer')
     def test_elaboration_process_general_exception(self, MockContextAnalyzer):
         mock_analyzer_instance = MockContextAnalyzer.return_value
         mock_analyzer_instance.model = True
@@ -147,7 +147,7 @@ class TestReportElaborator(unittest.TestCase):
         # This test might be better if we can verify the content passed to ContextAnalyzer 
         # without a full mock if ContextAnalyzer itself is reliable.
         # For now, we'll mock to check the arg.
-        with patch('report_elaborator.ContextAnalyzer') as MockCA:
+        with patch('src.report_elaborator.ContextAnalyzer') as MockCA:
             mock_instance = MockCA.return_value
             mock_instance.model = True
             mock_instance.elaborate_on_match.return_value = "Elaborated with custom window."

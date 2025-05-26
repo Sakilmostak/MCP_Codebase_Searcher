@@ -12,7 +12,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Now import the module
-from file_scanner import FileScanner, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES, DEFAULT_BINARY_EXTENSIONS
+from src.file_scanner import FileScanner, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES, DEFAULT_BINARY_EXTENSIONS
 
 class TestFileScanner(unittest.TestCase):
     def setUp(self):

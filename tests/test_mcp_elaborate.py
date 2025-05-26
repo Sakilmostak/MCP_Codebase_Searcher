@@ -13,7 +13,7 @@ if project_root not in sys.path:
 # This is to control API key loading behavior during tests
 config_mock = MagicMock()
 config_mock.load_api_key.return_value = None # Default to no key from config
-sys.modules['config'] = config_mock
+sys.modules['src.config'] = config_mock
 
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold, GenerationConfig
@@ -21,11 +21,11 @@ from google.api_core.exceptions import GoogleAPIError, InternalServerError, Reso
 from google.generativeai.types import BlockedPromptException
 
 # Now that config is mocked, we can import the module to be tested
-from mcp_elaborate import ContextAnalyzer 
+from src.mcp_elaborate import ContextAnalyzer 
 
 # Helper to reset mocks that might persist across tests, especially for module-level mocks
 @patch.dict(os.environ, {}, clear=True) # Clear os.environ for each test
-@patch('config.load_api_key', return_value=None) # Reset config.load_api_key for each test
+@patch('src.config.load_api_key', return_value=None) # Reset config.load_api_key for each test
 def reset_mocks(mock_config_load_api_key):
     pass # This function is just a vehicle for the decorators
 
@@ -58,7 +58,7 @@ class TestContextAnalyzer(unittest.TestCase):
         pass 
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "env_key"}, clear=True)
-    @patch('config.load_api_key', return_value=None)
+    @patch('src.config.load_api_key', return_value=None)
     def test_init_api_key_from_env(self, mock_load_api_key):
         analyzer = ContextAnalyzer()
         self.assertEqual(analyzer.api_key, "env_key")
@@ -66,7 +66,7 @@ class TestContextAnalyzer(unittest.TestCase):
         self.MockGenerativeModel.assert_called_once()
         self.assertIsNotNone(analyzer.model)
 
-    @patch('config.load_api_key', return_value="config_key")
+    @patch('src.config.load_api_key', return_value="config_key")
     @patch.dict(os.environ, {}, clear=True)
     def test_init_api_key_from_config(self, mock_load_api_key):
         analyzer = ContextAnalyzer(api_key=None) # Explicitly pass None to prioritize config/env
@@ -77,7 +77,7 @@ class TestContextAnalyzer(unittest.TestCase):
         self.assertIsNotNone(analyzer.model)
 
     @patch.dict(os.environ, {}, clear=True) # Ensure no env key
-    @patch('config.load_api_key', return_value=None) # Ensure no config key
+    @patch('src.config.load_api_key', return_value=None) # Ensure no config key
     def test_init_api_key_from_param(self, mock_load_api_key):
         analyzer = ContextAnalyzer(api_key="param_key")
         self.assertEqual(analyzer.api_key, "param_key")
@@ -86,7 +86,7 @@ class TestContextAnalyzer(unittest.TestCase):
         self.assertIsNotNone(analyzer.model)
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "env_key_override"}, clear=True)
-    @patch('config.load_api_key', return_value="config_key")
+    @patch('src.config.load_api_key', return_value="config_key")
     def test_init_api_key_priority_param_over_env_over_config(self, mock_load_api_key):
         # Param has highest priority
         analyzer_param = ContextAnalyzer(api_key="param_key_wins")
@@ -102,9 +102,9 @@ class TestContextAnalyzer(unittest.TestCase):
         mock_load_api_key.assert_not_called() # Config still not called if env is present
 
     @patch.dict(os.environ, {}, clear=True)
-    @patch('config.load_api_key', return_value=None)
+    @patch('src.config.load_api_key', return_value=None)
     def test_init_no_api_key(self, mock_load_api_key):
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             analyzer = ContextAnalyzer() # No key via param, env, or config
             self.assertIsNone(analyzer.api_key)
             self.assertIsNone(analyzer.model) # Model should not be initialized
@@ -113,10 +113,10 @@ class TestContextAnalyzer(unittest.TestCase):
             self.assertIn("error: contextanalyzer initialized without an api key. elaboration will not function.", mock_stderr.getvalue().lower())
 
     @patch.dict(os.environ, {"GOOGLE_API_KEY": "dummy_key"}, clear=True)
-    @patch('config.load_api_key', return_value=None)
+    @patch('src.config.load_api_key', return_value=None)
     @patch('google.generativeai.GenerativeModel', side_effect=Exception("Model init failed"))
     def test_init_model_initialization_failure(self, mock_gm_fail, mock_load_api_key):
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             analyzer = ContextAnalyzer()
             self.assertEqual(analyzer.api_key, "dummy_key")
             self.assertIsNone(analyzer.model)
@@ -136,7 +136,7 @@ class TestContextAnalyzer(unittest.TestCase):
         analyzer = ContextAnalyzer() # No API key, so model is None. __init__ would have printed.
         self.assertIsNone(analyzer.model)
         
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr_elaborate_call:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr_elaborate_call:
             elaboration = analyzer.elaborate_on_match("path/file.py", 10, "snippet")
             self.assertEqual(elaboration, "Error: Elaboration model not initialized. Cannot elaborate.")
             # Check that elaborate_on_match itself didn't print to stderr for this case
@@ -146,7 +146,7 @@ class TestContextAnalyzer(unittest.TestCase):
         analyzer = ContextAnalyzer(api_key="fake_key")
         self.mock_generative_model_instance.generate_content.side_effect = GoogleAPIError("API Error")
         analyzer.model = self.mock_generative_model_instance
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             elaboration = analyzer.elaborate_on_match("path/file.py", 10, "snippet")
             self.assertTrue(elaboration.startswith("[API error during elaboration"))
             self.assertTrue(elaboration.endswith("]"))
@@ -158,7 +158,7 @@ class TestContextAnalyzer(unittest.TestCase):
         analyzer = ContextAnalyzer(api_key="fake_key")
         self.mock_generative_model_instance.generate_content.side_effect = BlockedPromptException("Blocked prompt")
         analyzer.model = self.mock_generative_model_instance
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             elaboration = analyzer.elaborate_on_match("path/file.py", 10, "snippet")
             self.assertTrue(elaboration.startswith("[Elaboration blocked by API"))
             self.assertTrue(elaboration.endswith("]"))
@@ -170,7 +170,7 @@ class TestContextAnalyzer(unittest.TestCase):
         analyzer = ContextAnalyzer(api_key="fake_key")
         self.mock_generative_model_instance.generate_content.side_effect = Exception("Unexpected error")
         analyzer.model = self.mock_generative_model_instance
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             elaboration = analyzer.elaborate_on_match("path/file.py", 10, "snippet")
             self.assertTrue(elaboration.startswith("[Unexpected error during elaboration"))
             self.assertTrue(elaboration.endswith("]"))
@@ -184,7 +184,7 @@ class TestContextAnalyzer(unittest.TestCase):
 
         # Test 1: Response with no parts
         self.mock_generative_model_instance.generate_content.return_value = MagicMock(parts=[], prompt_feedback=MagicMock(block_reason=None))
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             elaboration = analyzer.elaborate_on_match("path/file.py", 10, "snippet1")
             self.assertEqual(elaboration, "[No content returned from API for elaboration]")
             self.assertIn("no parts found in api response", mock_stderr.getvalue().lower())
@@ -197,7 +197,7 @@ class TestContextAnalyzer(unittest.TestCase):
             parts=[mock_part_no_text],
             prompt_feedback=MagicMock(block_reason=None)
         )
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             elaboration = analyzer.elaborate_on_match("path/file.py", 11, "snippet2")
             self.assertEqual(elaboration, "[Elaboration from API was empty or unparsable]")
             expected_stderr_msg = "warning: received empty elaboration from api for path/file.py:11."
@@ -209,7 +209,7 @@ class TestContextAnalyzer(unittest.TestCase):
             parts=[mock_part_empty_text],
             prompt_feedback=MagicMock(block_reason=None)
         )
-        with patch('mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
+        with patch('src.mcp_elaborate.sys.stderr', new_callable=io.StringIO) as mock_stderr:
             elaboration = analyzer.elaborate_on_match("path/file.py", 12, "snippet3")
             self.assertEqual(elaboration, "[Elaboration from API was empty or unparsable]")
             self.assertIn("received empty elaboration from api", mock_stderr.getvalue().lower())
