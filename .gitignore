@@ -18,6 +18,7 @@ env/
 
 # Python Virtual Environment
 venv/
+test_install_venv/
 
 # Editor directories and files
 .idea
