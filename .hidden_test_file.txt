@@ -1,2 +1,0 @@
-This is a .hidden_test_file.txt
-It contains the super_secret_hidden_query for Searcher. 
