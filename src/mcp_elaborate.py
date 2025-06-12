@@ -9,9 +9,9 @@ import google.api_core.exceptions # For more specific API error handling
 
 # Direct import, as config.py is installed as a top-level module
 try:
-    from . import config
+    import config
 except ImportError as e:
-    print(f"Warning: Could not import '.'config' module. API key loading might rely on direct environment variables. Error: {e}", file=sys.stderr)
+    print(f"Warning: Could not import 'config' module. API key loading might rely on direct environment variables. Error: {e}", file=sys.stderr)
     config = None # Allow script to continue if API key is passed directly or via env
     # raise # Re-raise the ImportError to make it visible during tests
 
@@ -149,29 +149,29 @@ class ContextAnalyzer:
             if response.prompt_feedback and response.prompt_feedback.block_reason:
                 reason = response.prompt_feedback.block_reason.name
                 print(f"Warning: Elaboration for {file_path}:{line_number} blocked by API. Reason: {reason}", file=sys.stderr)
-                return f"[Elaboration blocked by API. Reason: {reason}]"
+                return f"Error: Elaboration blocked by API. Reason: {reason}"
             
             if response.parts:
                 elaboration_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
                 if not elaboration_text.strip():
                     print(f"Warning: Received empty elaboration from API for {file_path}:{line_number}.", file=sys.stderr)
-                    return "[Elaboration from API was empty or unparsable]"
+                    return "Error: Elaboration from API was empty or unparsable"
                 return elaboration_text
             else:
                 print(f"Warning: No parts found in API response for {file_path}:{line_number}. Response: {response}", file=sys.stderr)
-                return "[No content returned from API for elaboration]"
+                return "Error: No content returned from API for elaboration"
 
         except BlockedPromptException as e:
             print(f"Warning: Elaboration for {file_path}:{line_number} was explicitly blocked. {e}", file=sys.stderr)
-            return f"[Elaboration blocked by API: {e}]"
+            return f"Error: Elaboration blocked by API: {e}"
         except google.api_core.exceptions.GoogleAPIError as e:
             error_message = f"API error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
             print(f"Warning: {error_message}", file=sys.stderr)
-            return f"[{error_message}]"
+            return f"Error: {error_message}"
         except Exception as e:
             error_message = f"Unexpected error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
             print(f"Warning: {error_message}", file=sys.stderr)
-            return f"[{error_message}]"
+            return f"Error: {error_message}"
 
 if __name__ == '__main__':
     print("MCP Elaborate module direct execution (for testing during dev)")

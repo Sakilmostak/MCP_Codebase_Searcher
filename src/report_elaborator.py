@@ -24,8 +24,8 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
             report_data = json.load(f)
     except FileNotFoundError:
         return f"Error: Report file not found at '{report_path}'."
-    except json.JSONDecodeError:
-        return f"Error: Could not decode JSON from report file '{report_path}'."
+    except json.JSONDecodeError as e:
+        return f"Error: Report file '{report_path}' is malformed or not valid JSON. Details: {e}"
     except Exception as e:
         return f"Error: Could not read report file '{report_path}': {e}"
 

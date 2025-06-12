@@ -1,0 +1,26 @@
+[
+    {
+        "file_path": "/Users/sk.sakil/mcp_codebase_searcher/mcp_searcher_test_env/sample_project/file1.txt",
+        "line_number": 2,
+        "match_text": "test query",
+        "char_start_in_line": 0,
+        "char_end_in_line": 10,
+        "snippet": "   1: Hello World\n   2: >>>test query<<<"
+    },
+    {
+        "file_path": "/Users/sk.sakil/mcp_codebase_searcher/mcp_searcher_test_env/sample_project/file2.py",
+        "line_number": 3,
+        "match_text": "Test Query",
+        "char_start_in_line": 19,
+        "char_end_in_line": 29,
+        "snippet": "   1: def my_function():\n   2:     # TODO: Fix this\n   3:     print('Another >>>Test Query<<<')"
+    },
+    {
+        "file_path": "/Users/sk.sakil/mcp_codebase_searcher/mcp_searcher_test_env/sample_project/src/main.c",
+        "line_number": 2,
+        "match_text": "TEST QUERY",
+        "char_start_in_line": 7,
+        "char_end_in_line": 17,
+        "snippet": "   1: int main() {\n   2:     // >>>TEST QUERY<<<\n   3:     return 0;"
+    }
+]

@@ -1,0 +1,1 @@
+special query with $var and (parens)!

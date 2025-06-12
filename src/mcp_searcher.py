@@ -5,6 +5,7 @@ import os
 import sys
 import re # For Searcher's regex compilation and potential re.error
 import json # For output_generator
+from dotenv import load_dotenv # Added for explicit .env loading
 
 # Direct absolute imports, as these modules are installed at the top level
 try:
@@ -155,10 +156,6 @@ def main():
                 except Exception as e:
                     print(f"Error searching file {file_path}: {type(e).__name__} - {e}", file=sys.stderr)
             
-            if not results:
-                print("No matches found for your query.")
-                sys.exit(0)
-
             output_gen = OutputGenerator(output_format=args.output_format)
             formatted_output = output_gen.generate_output(results)
 
@@ -167,16 +164,21 @@ def main():
                     with open(args.output_file, 'w', encoding='utf-8') as f:
                         f.write(formatted_output)
                     print(f"Output successfully saved to {args.output_file}")
+                    if not results:
+                        if args.output_format == 'json':
+                            print("(The file contains an empty JSON array `[]` as no matches were found.)")
+                        else:
+                            print("(The file indicates no matches were found.)")
                 except IOError as e:
                     print(f"Error: Could not write to output file '{args.output_file}': {e}", file=sys.stderr)
-                    if args.output_format == 'console':
+                    if args.output_format != 'console':
                         print("\n--- Outputting to Console as Fallback ---")
-                        print(formatted_output)
-                    else:
-                        print(formatted_output)
+                    print(formatted_output)
                     sys.exit(1)
             else:
                 print(formatted_output)
+
+            sys.exit(0)
 
         except Exception as e:
             print(f"An unexpected error occurred during search: {type(e).__name__} - {e}", file=sys.stderr)
@@ -184,20 +186,51 @@ def main():
 
     elif args.command == 'elaborate':
         api_key_to_use = args.api_key
-        
+        source_of_key = "args.api_key" if api_key_to_use else None
+
         if not api_key_to_use and args.config_file:
             try:
                 with open(args.config_file, 'r', encoding='utf-8') as f_cfg:
                     config_data = json.load(f_cfg)
-                    api_key_to_use = config_data.get('GOOGLE_API_KEY')
-                if not api_key_to_use:
-                    print(f"Info: GOOGLE_API_KEY not found in config file '{args.config_file}'. Relying on other methods (env var, config.py).", file=sys.stderr)
+                    api_key_from_config_file = config_data.get('GOOGLE_API_KEY')
+                    if api_key_from_config_file:
+                        api_key_to_use = api_key_from_config_file
+                        source_of_key = f"config file ({args.config_file})"
             except FileNotFoundError:
-                print(f"Warning: Config file '{args.config_file}' not found. Relying on other methods for API key.", file=sys.stderr)
+                print(f"Warning: Config file '{args.config_file}' not found.", file=sys.stderr)
             except json.JSONDecodeError:
-                print(f"Warning: Could not decode JSON from config file '{args.config_file}'. Relying on other methods for API key.", file=sys.stderr)
-            except Exception as e:
-                print(f"Warning: Error reading config file '{args.config_file}': {e}. Relying on other methods for API key.", file=sys.stderr)
+                print(f"Warning: Could not decode JSON from config file '{args.config_file}'.", file=sys.stderr)
+            except Exception as e_cfg_load:
+                print(f"Warning: Error reading config file '{args.config_file}': {e_cfg_load}.", file=sys.stderr)
+
+        if not api_key_to_use:
+            # Temporarily load .env to check for GOOGLE_API_KEY specifically for this step
+            # We use a distinct load_dotenv call here to isolate its effect for logging.
+            # The key, if found, is immediately retrieved from os.environ.
+            # Subsequent calls to os.getenv() by other modules will see this if it was loaded.
+            # ContextAnalyzer's own config.load_api_key() also calls load_dotenv.
+            original_env_key_value = os.getenv('GOOGLE_API_KEY') # Store pre-load_dotenv value if any
+            dotenv_loaded = load_dotenv(dotenv_path=os.path.join(os.getcwd(), '.env'), override=True)
+            
+            key_from_dotenv_cwd = os.getenv('GOOGLE_API_KEY')
+
+            if key_from_dotenv_cwd and (dotenv_loaded or key_from_dotenv_cwd != original_env_key_value):
+                # Key was found and it's from the .env file (either newly loaded or .env overrode a previous value)
+                api_key_to_use = key_from_dotenv_cwd
+                source_of_key = ".env file in CWD"
+            # If load_dotenv modified os.environ, we might want to restore the original state
+            # if this local .env check is meant to be strictly temporary and not affect later getenv calls
+            # For now, let it modify os.environ as this is typical dotenv behavior.
+
+        if not api_key_to_use:
+            env_api_key = os.getenv('GOOGLE_API_KEY') # This will pick up key from .env if loaded above, or global env
+            if env_api_key:
+                # If source_of_key is already ".env file in CWD", we don't want to overwrite that.
+                # This block is for when the key comes *only* from a pre-existing global env var.
+                if source_of_key != ".env file in CWD": # Check if it wasn't already sourced from .env CWD
+                    api_key_to_use = env_api_key
+                    source_of_key = "GOOGLE_API_KEY environment variable (system/shell)"
+                # else: key already sourced from .env CWD, which took precedence
 
         try:
             elaboration_result = elaborate_finding(
