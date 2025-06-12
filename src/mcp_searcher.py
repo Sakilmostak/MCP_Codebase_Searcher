@@ -25,6 +25,40 @@ def parse_arguments():
         description="MCP Codebase Searcher: Searches codebases and elaborates on findings.",
         formatter_class=argparse.RawTextHelpFormatter
     )
+
+    # --- Global Caching Arguments ---
+    cache_group = parser.add_argument_group('Caching Options')
+    cache_group.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="Disable caching for this run."
+    )
+    cache_group.add_argument(
+        "--clear-cache",
+        action="store_true",
+        help="Clear all cached data before proceeding."
+    )
+    cache_group.add_argument(
+        "--cache-dir",
+        type=str,
+        default=os.path.expanduser("~/.cache/mcp_codebase_searcher"),
+        metavar="DIRECTORY",
+        help="Directory to store cache files (default: ~/.cache/mcp_codebase_searcher)."
+    )
+    cache_group.add_argument(
+        "--cache-expiry",
+        type=int,
+        default=7,
+        metavar="DAYS",
+        help="Default cache expiry in days (default: 7)."
+    )
+    cache_group.add_argument(
+        "--cache-size-limit",
+        type=int,
+        metavar="MB",
+        help="Cache size limit in Megabytes."
+    )
+
     subparsers = parser.add_subparsers(dest='command', help='Available commands', required=True)
 
     # --- Search command ---
