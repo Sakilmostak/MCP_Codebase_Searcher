@@ -1,1 +1,0 @@
-This is a very long line designed to test how the output is handled when lines exceed typical console width, it just keeps going and going and going and going and going to ensure it's sufficiently long for the test case.

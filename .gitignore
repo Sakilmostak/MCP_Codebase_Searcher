@@ -86,4 +86,7 @@ MANIFEST
 tasks.json
 tasks/
 .taskmasterconfig
-scripts/task-complexity-report.json 
+scripts/task-complexity-report.json
+
+# Test environment specific to mcp-codebase-searcher
+mcp_searcher_test_env/ 
