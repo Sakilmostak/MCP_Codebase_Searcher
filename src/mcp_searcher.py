@@ -301,9 +301,9 @@ def main():
                     report_path=args.report_file,
                     finding_id=args.finding_id,
                     api_key=api_key_to_use,
-                    context_window_lines=args.context_lines
-                    # cache_manager=cache_manager, # To be added/used in Task 8
-                    # no_cache=args.no_cache      # To be added/used in Task 8
+                    context_window_lines=args.context_lines,
+                    cache_manager=cache_manager,
+                    no_cache=args.no_cache
                 )
                 if elaboration_result.startswith("Error:"):
                     print(elaboration_result, file=sys.stderr)

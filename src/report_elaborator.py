@@ -1,20 +1,24 @@
 import json
 import sys
 import os # For API key loading, and reading full file content
+import hashlib # Added for hashing
 
 # Direct import, as mcp_elaborate.py is installed as a top-level module
 from mcp_elaborate import ContextAnalyzer
 
-def elaborate_finding(report_path, finding_id, api_key=None, context_window_lines=10):
+def elaborate_finding(report_path, finding_id, api_key=None, context_window_lines=10, cache_manager=None, no_cache=False):
     """
     Loads a JSON search report, locates a specific finding by its index (finding_id),
     reads the source file for broader context, and uses ContextAnalyzer to elaborate.
+    Utilizes caching if cache_manager is provided and no_cache is False.
 
     Args:
         report_path (str): Path to the JSON search report file.
         finding_id (int or str): The 0-based index of the finding or a string to be converted to int.
         api_key (str, optional): Google API key for ContextAnalyzer. Defaults to None (analyzer will try other methods).
         context_window_lines (int, optional): Number of lines for broader context. Defaults to 10.
+        cache_manager (CacheManager, optional): Instance of CacheManager for caching. Defaults to None.
+        no_cache (bool, optional): If True, disables caching for this call. Defaults to False.
 
     Returns:
         str: The elaboration text or an error message string.
@@ -45,6 +49,28 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
     if not all(key in found_finding for key in required_keys):
         return f"Error: Finding at index {finding_index} has an invalid structure. Missing one of {required_keys}."
 
+    # --- Caching Logic: GET ---
+    cache_key_components = None
+    if cache_manager and not no_cache:
+        try:
+            # Create a stable representation of the finding for hashing
+            finding_json_str = json.dumps(found_finding, sort_keys=True)
+            finding_hash = hashlib.sha256(finding_json_str.encode('utf-8')).hexdigest()
+            
+            # Use api_key in the cache key as it influences the ContextAnalyzer's behavior/model.
+            # While ContextAnalyzer might use a specific model_name, the api_key is what's directly passed
+            # and could point to different configurations or access levels.
+            cache_key_components = ('elaborate', finding_hash, context_window_lines, api_key)
+            
+            cached_elaboration = cache_manager.get(cache_key_components)
+            if cached_elaboration is not None:
+                print(f"Cache hit for elaborate finding ID {finding_index} (key: {cache_manager._generate_key(cache_key_components)[:12]}...).", file=sys.stderr)
+                return cached_elaboration
+            else:
+                print(f"Cache miss for elaborate finding ID {finding_index} (key: {cache_manager._generate_key(cache_key_components)[:12]}...).", file=sys.stderr)
+        except Exception as e:
+            print(f"Warning: Cache GET operation failed during elaborate: {e}", file=sys.stderr)
+
     source_file_path = found_finding['file_path']
     full_file_content = None
     try:
@@ -72,6 +98,15 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
             full_file_content=full_file_content,
             context_window_lines=context_window_lines
         )
+
+        # --- Caching Logic: SET ---
+        if cache_manager and not no_cache and cache_key_components and not elaboration.startswith("Error:"):
+            try:
+                cache_manager.set(cache_key_components, elaboration)
+                print(f"Cached elaborate result for finding ID {finding_index} (key: {cache_manager._generate_key(cache_key_components)[:12]}...).", file=sys.stderr)
+            except Exception as e:
+                print(f"Warning: Cache SET operation failed during elaborate: {e}", file=sys.stderr)
+        
         return elaboration
     except Exception as e:
         return f"Error during elaboration process: {e}"
