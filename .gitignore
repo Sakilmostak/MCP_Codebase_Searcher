@@ -89,4 +89,10 @@ tasks/
 scripts/task-complexity-report.json
 
 # Test environment specific to mcp-codebase-searcher
-mcp_searcher_test_env/ 
+mcp_searcher_test_env/
+
+# Planning and log files
+mcp_codebase_searcher_debugging_plan.txt
+task_master_test_plan.txt
+potential_bugs_log.txt
+prd.txt 
