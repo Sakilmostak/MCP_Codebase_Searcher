@@ -27,6 +27,7 @@ classifiers = [
 dependencies = [
     "python-dotenv",
     "google-generativeai",
+    "diskcache",
 ]
 
 # py-modules IS REMOVED FROM HERE
