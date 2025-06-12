@@ -2,6 +2,7 @@ import diskcache
 import os
 import hashlib
 import json
+import sys
 
 DEFAULT_CACHE_DIR = os.path.expanduser("~/.cache/mcp_codebase_searcher")
 DEFAULT_EXPIRY_SECONDS = 7 * 24 * 60 * 60  # 7 days
@@ -44,24 +45,39 @@ class CacheManager:
     def get(self, key_components):
         cache_key = self._generate_key(key_components)
         # print(f"DEBUG: Cache GET attempt for key: {cache_key} (from components: {key_components})")
-        return self.cache.get(cache_key)
+        try:
+            return self.cache.get(cache_key)
+        except Exception as e:
+            print(f"Warning: Cache GET operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr)
+            return None
 
     def set(self, key_components, value, expire=None):
         cache_key = self._generate_key(key_components)
         effective_expire = expire if expire is not None else self.expiry_seconds
         # print(f"DEBUG: Cache SET for key: {cache_key} (from components: {key_components}), expiry: {effective_expire}s")
-        self.cache.set(cache_key, value, expire=effective_expire)
+        try:
+            self.cache.set(cache_key, value, expire=effective_expire)
+        except Exception as e:
+            print(f"Warning: Cache SET operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr)
 
     def delete(self, key_components):
         cache_key = self._generate_key(key_components)
         # print(f"DEBUG: Cache DELETE for key: {cache_key} (from components: {key_components})")
-        return self.cache.delete(cache_key)
+        try:
+            return self.cache.delete(cache_key) # Returns number of keys deleted (0 or 1)
+        except Exception as e:
+            print(f"Warning: Cache DELETE operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr)
+            return 0 # Indicate no keys were deleted in case of error
 
     def clear_all(self):
         # print(f"DEBUG: Clearing all cache from {self.cache_dir}")
-        count = self.cache.clear()
-        # print(f"DEBUG: Cleared {count} items.")
-        return count
+        try:
+            count = self.cache.clear()
+            # print(f"DEBUG: Cleared {count} items.")
+            return count
+        except Exception as e:
+            print(f"Warning: Cache CLEAR_ALL operation failed for directory '{self.cache_dir}'. Error: {e}", file=sys.stderr)
+            return 0 # Indicate no items were cleared
 
     def close(self):
         # print(f"DEBUG: Closing cache at {self.cache_dir}")
