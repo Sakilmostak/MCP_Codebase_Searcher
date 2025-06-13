@@ -88,7 +88,10 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
 
     try:
         analyzer = ContextAnalyzer(api_key=api_key)
-        if not analyzer.model:
+        try:
+            if not analyzer.model:
+                return "Error: ContextAnalyzer model could not be initialized. Cannot elaborate."
+        except AttributeError:
             return "Error: ContextAnalyzer model could not be initialized. Cannot elaborate."
 
         elaboration = analyzer.elaborate_on_match(
