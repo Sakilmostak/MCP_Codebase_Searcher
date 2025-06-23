@@ -4,6 +4,7 @@ import re
 import os # Added for file operations
 import shutil # Added for cleanup
 import sys # Added for printing to stderr
+import logging # Added import
 
 class Searcher:
     """Handles searching for a query within a list of files."""
@@ -86,31 +87,27 @@ class Searcher:
 
         if not self.no_cache and self.cache_manager:
             # Attempt to retrieve from cache
-            # 1. Collect all necessary components for the cache key.
             key_components = (
-                "search_operation", # Identifier for the operation type
+                "search_operation",
                 self.query,
                 self.is_case_sensitive,
                 self.is_regex,
                 self.context_lines,
-                # file_data_list is a list of (path, timestamp) tuples.
-                # CacheManager.get() will pass this to _generate_key(),
-                # which converts it to a dict {path: ts} for stable serialization.
                 file_data_list
             )
             
-            # search_cache_key = self.cache_manager._generate_key(key_components) # _generate_key is internal to CacheManager
-            cached_result = self.cache_manager.get(key_components) # Pass components tuple directly
+            cached_result = self.cache_manager.get(key_components)
 
-            # if cached_result is not None:
-            #     # TODO: Add logging for cache hit (INFO level) (Subtask 8.5)
-            #     # print(f"DEBUG: Cache hit for search key derived from: {key_components}", file=sys.stderr)
-            #     return cached_result
-            # else:
-            #     # TODO: Add logging for cache miss (DEBUG/INFO level) (Subtask 8.5)
-            #     # print(f"DEBUG: Cache miss for search key derived from: {key_components}", file=sys.stderr)
-            #     pass # Proceed to actual search
-            pass # Placeholder for Subtask 8.5 logic (handling the cached_result)
+            if cached_result is not None:
+                logging.info(f"Cache hit for search operation. First component of key: {key_components[0]}") # Avoid logging potentially large file_data_list
+                # For more detailed debug logging of the key if needed:
+                # logging.debug(f"Cache hit for search key derived from components: {key_components}")
+                return cached_result
+            else:
+                logging.debug(f"Cache miss for search operation. First component of key: {key_components[0]}")
+                # logging.debug(f"Cache miss for search key derived from components: {key_components}")
+                # Proceed to actual search (logic below this block)
+                pass
 
         # If caching is disabled, cache_manager is None, or it's a cache miss, proceed with search:
         all_results = []
