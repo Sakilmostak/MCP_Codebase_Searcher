@@ -9,7 +9,7 @@ import hashlib
 import pytest
 import tempfile
 
-import src.report_elaborator # Ensures src.report_elaborator is an accessible module object
+import src.report_elaborator # MODIFIED: Changed import
 
 # Add project root to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -72,27 +72,35 @@ class TestReportElaborator(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
-    def test_elaborate_finding_success(self, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
-        mock_analyzer_instance.model = True 
-        mock_analyzer_instance.api_key = DUMMY_API_KEY
-        mock_analyzer_instance.elaborate_on_match.return_value = "Successful elaboration."
-
-        result = elaborate_finding(self.report_file_path, 0, api_key=DUMMY_API_KEY)
-        self.assertEqual(result, "Successful elaboration.")
+    def test_elaborate_finding_success(self, mock_gen_model_constructor, mock_genai_configure):
         
-        expected_finding = self.report_data[0]
-        mock_analyzer_instance.elaborate_on_match.assert_called_once_with(
-            file_path=expected_finding['file_path'],
-            line_number=expected_finding['line_number'],
-            snippet=expected_finding['snippet'],
-            full_file_content=self.mock_source_content,
-            context_window_lines=10 # Default
-        )
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=DUMMY_API_KEY)
-        mock_gen_model.assert_not_called()
-        mock_genai_configure.assert_not_called()
+        # Configure the mock generative model instance (general defensive measure)
+        mock_model_instance = mock_gen_model_constructor.return_value # This is the mock for the GenerativeModel *instance*
+        mock_response = MagicMock()
+        mock_response.prompt_feedback.block_reason = None
+        mock_response.text = "Defensive Mocked LLM Text from genai.GenerativeModel"
+        mock_model_instance.generate_content.return_value = mock_response
+
+        # Use patch as a context manager for ContextAnalyzer
+        with patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True) as MockedCA_at_usage_point:
+            primary_mock_analyzer_instance = MockedCA_at_usage_point.return_value
+            primary_mock_analyzer_instance.model = True 
+            primary_mock_analyzer_instance.api_key = DUMMY_API_KEY
+            primary_mock_analyzer_instance.elaborate_on_match.return_value = "Successful elaboration."
+
+            result = src.report_elaborator.elaborate_finding(self.report_file_path, 0, api_key=DUMMY_API_KEY)
+            self.assertEqual(result, "Successful elaboration.")
+            
+            expected_finding = self.report_data[0]
+            
+            MockedCA_at_usage_point.assert_called_once_with(api_key=DUMMY_API_KEY)
+            primary_mock_analyzer_instance.elaborate_on_match.assert_called_once_with(
+                file_path=expected_finding['file_path'],
+                line_number=expected_finding['line_number'],
+                snippet=expected_finding['snippet'],
+                full_file_content=self.mock_source_content,
+                context_window_lines=10 # Default
+            )
 
     def test_report_file_not_found(self):
         result = elaborate_finding("non_existent_report.json", 0)
@@ -129,10 +137,10 @@ class TestReportElaborator(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
     @patch('src.report_elaborator.logging.warning')
-    def test_source_file_not_found_for_finding(self, mock_logging_warning, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    def test_source_file_not_found_for_finding(self, mock_logging_warning, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True 
         mock_analyzer_instance.api_key = DUMMY_API_KEY
         mock_analyzer_instance.elaborate_on_match.return_value = "Elaboration based on snippet only."
@@ -155,59 +163,48 @@ class TestReportElaborator(unittest.TestCase):
                 called_with_expected = True
                 break
         self.assertTrue(called_with_expected, f"Expected log message not found: {expected_log_message}")
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=DUMMY_API_KEY)
+        MockedContextAnalyzer.assert_called_once_with(api_key=DUMMY_API_KEY)
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
 
     # Reverting to decorator-based patching, targeting mcp_elaborate for ContextAnalyzer and its deps
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
-    def test_context_analyzer_init_fails(self, MockContextAnalyzerInReportElaborator, mock_gen_model, mock_genai_configure):
-        # Configure the mock instance that MockContextAnalyzerInReportElaborator (the mock for src.report_elaborator.ContextAnalyzer) will return.
-        mock_ca_instance = MockContextAnalyzerInReportElaborator.return_value
-        mock_ca_instance.model = None # Simulate that the model attribute is None after our mocked CA tried to initialize.
-        mock_ca_instance.api_key = None # Explicitly None for this test case
-        mock_ca_instance.elaborate_on_match = MagicMock() # This method should not be called in this error path.
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
+    def test_context_analyzer_init_fails(self, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_ca_instance = MockedContextAnalyzer.return_value
+        mock_ca_instance.model = None
+        mock_ca_instance.api_key = None 
+        mock_ca_instance.elaborate_on_match = MagicMock()
 
-        # Call elaborate_finding. It should import and use the mocked src.report_elaborator.ContextAnalyzer.
-        result = elaborate_finding(self.report_file_path, 0, api_key=None)
+        result = src.report_elaborator.elaborate_finding(self.report_file_path, 0, api_key=None)
         
-        # Assert that our mock constructor (for src.report_elaborator.ContextAnalyzer) was indeed called.
-        MockContextAnalyzerInReportElaborator.assert_called_once_with(api_key=None)
-        
-        # Assert the expected error message when analyzer.model is None.
+        MockedContextAnalyzer.assert_called_once_with(api_key=None)
         self.assertEqual(result, "Error: ContextAnalyzer model could not be initialized. Cannot elaborate.")
-        
-        # Ensure the elaborate_on_match method of our mock instance was not called.
         mock_ca_instance.elaborate_on_match.assert_not_called()
-
-        # These genai mocks (for mcp_elaborate) should NOT have been called,
-        # because MockContextAnalyzerInReportElaborator is a mock and bypasses the real __init__ logic of ContextAnalyzer
-        # where genai.configure and genai.GenerativeModel would be invoked.
         mock_genai_configure.assert_not_called()
         mock_gen_model.assert_not_called()
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
-    def test_elaboration_process_general_exception(self, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
+    def test_elaboration_process_general_exception(self, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True 
         mock_analyzer_instance.api_key = DUMMY_API_KEY
         mock_analyzer_instance.elaborate_on_match.side_effect = Exception("LLM API broke")
     
         result = elaborate_finding(self.report_file_path, 0, api_key=DUMMY_API_KEY)
         self.assertEqual(result, "Error during elaboration process: LLM API broke")
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=DUMMY_API_KEY)
+        MockedContextAnalyzer.assert_called_once_with(api_key=DUMMY_API_KEY)
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
-    def test_elaborate_finding_custom_context_window(self, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
+    def test_elaborate_finding_custom_context_window(self, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True 
         mock_analyzer_instance.api_key = DUMMY_API_KEY
         mock_analyzer_instance.elaborate_on_match.return_value = "Elaborated with custom window."
@@ -224,16 +221,16 @@ class TestReportElaborator(unittest.TestCase):
             full_file_content=self.mock_source_content,
             context_window_lines=custom_window
         )
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=DUMMY_API_KEY)
+        MockedContextAnalyzer.assert_called_once_with(api_key=DUMMY_API_KEY)
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
     @patch('src.report_elaborator.logging.info')
-    def test_elaborate_finding_cache_hit(self, mock_logging_info, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value 
+    def test_elaborate_finding_cache_hit(self, mock_logging_info, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value 
         mock_analyzer_instance.model = True
         mock_analyzer_instance.api_key = DUMMY_API_KEY
 
@@ -254,7 +251,7 @@ class TestReportElaborator(unittest.TestCase):
             DUMMY_API_KEY
         )
         mock_cache_manager.get.assert_called_once_with(cache_key_components)
-        MockContextAnalyzerConstructor.assert_not_called()
+        MockedContextAnalyzer.assert_not_called()
         mock_analyzer_instance.elaborate_on_match.assert_not_called()
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
@@ -274,10 +271,10 @@ class TestReportElaborator(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
     @patch('src.report_elaborator.logging.info')
-    def test_elaborate_finding_cache_miss_and_set(self, mock_logging_info, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    def test_elaborate_finding_cache_miss_and_set(self, mock_logging_info, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True
         mock_analyzer_instance.api_key = DUMMY_API_KEY
         llm_elaboration = "Fresh LLM elaboration."
@@ -292,7 +289,7 @@ class TestReportElaborator(unittest.TestCase):
         )
         self.assertEqual(result, llm_elaboration)
 
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=DUMMY_API_KEY)
+        MockedContextAnalyzer.assert_called_once_with(api_key=DUMMY_API_KEY)
         mock_analyzer_instance.elaborate_on_match.assert_called_once()
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
@@ -323,10 +320,10 @@ class TestReportElaborator(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
     @patch('src.report_elaborator.logging.warning')
-    def test_elaborate_finding_cache_get_exception(self, mock_logging_warning, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    def test_elaborate_finding_cache_get_exception(self, mock_logging_warning, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True # Mock that model is initialized
         mock_analyzer_instance.api_key = "test_api_key_get_exc"
         llm_elaboration_fallback = "LLM elaboration on GET exception."
@@ -342,7 +339,7 @@ class TestReportElaborator(unittest.TestCase):
         
         # Should fallback to LLM call
         self.assertEqual(result, llm_elaboration_fallback)
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key="test_api_key_get_exc")
+        MockedContextAnalyzer.assert_called_once_with(api_key="test_api_key_get_exc")
         mock_analyzer_instance.elaborate_on_match.assert_called_once() # LLM call should happen
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
@@ -358,10 +355,10 @@ class TestReportElaborator(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
     @patch('src.report_elaborator.logging.warning')
-    def test_elaborate_finding_cache_set_exception(self, mock_logging_warning, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    def test_elaborate_finding_cache_set_exception(self, mock_logging_warning, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True
         mock_analyzer_instance.api_key = "test_api_key_set_exc"
         llm_elaboration = "Fresh LLM elaboration for set exc test."
@@ -376,7 +373,7 @@ class TestReportElaborator(unittest.TestCase):
             cache_manager=mock_cache_manager, no_cache=False
         )
         
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key="test_api_key_set_exc")
+        MockedContextAnalyzer.assert_called_once_with(api_key="test_api_key_set_exc")
         mock_analyzer_instance.elaborate_on_match.assert_called_once() 
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
@@ -393,10 +390,10 @@ class TestReportElaborator(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
     @patch('src.report_elaborator.logging.info')
-    def test_elaborate_finding_no_cache_flag_prevents_set(self, mock_logging_info, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    def test_elaborate_finding_no_cache_flag_prevents_set(self, mock_logging_info, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True
         mock_analyzer_instance.api_key = "test_api_key_no_cache_set"
         llm_elaboration = "Fresh LLM elaboration (no_cache set True)."
@@ -414,7 +411,7 @@ class TestReportElaborator(unittest.TestCase):
         mock_cache_manager.get.assert_not_called() 
         mock_cache_manager.set.assert_not_called() 
         
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key="test_api_key_no_cache_set")
+        MockedContextAnalyzer.assert_called_once_with(api_key="test_api_key_no_cache_set")
         mock_analyzer_instance.elaborate_on_match.assert_called_once()
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
@@ -458,9 +455,9 @@ class TestElaboratorCachingWithRealCache(unittest.TestCase):
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
-    def test_elaborate_cache_hit_and_miss(self, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
+    def test_elaborate_cache_hit_and_miss(self, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True # Ensure the mocked analyzer thinks it has a model
         mock_analyzer_instance.api_key = "key_for_elaborate_cache_test"
         mock_elaboration_text = "This is a mock LLM elaboration for caching test."
@@ -477,7 +474,7 @@ class TestElaboratorCachingWithRealCache(unittest.TestCase):
             no_cache=False
         )
         self.assertEqual(result1, mock_elaboration_text)
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=test_api_key)
+        MockedContextAnalyzer.assert_called_once_with(api_key=test_api_key)
         mock_analyzer_instance.elaborate_on_match.assert_called_once()
         mock_gen_model.assert_not_called() # Real __init__ bypassed
         mock_genai_configure.assert_not_called() # Real __init__ bypassed
@@ -494,15 +491,15 @@ class TestElaboratorCachingWithRealCache(unittest.TestCase):
         # elaborate_on_match should STILL have been called only once in total (from the miss)
         mock_analyzer_instance.elaborate_on_match.assert_called_once()
         # ContextAnalyzer constructor should NOT be called again on a cache hit
-        MockContextAnalyzerConstructor.assert_called_once()
+        MockedContextAnalyzer.assert_called_once()
         mock_gen_model.assert_not_called() # Still not called
         mock_genai_configure.assert_not_called() # Still not called
 
     @patch('src.mcp_elaborate.genai.configure')
     @patch(MOCK_GENERATIVE_MODEL_PATH)
-    @patch('src.report_elaborator.ContextAnalyzer', autospec=True)
-    def test_elaborate_cache_invalidation_on_finding_change(self, MockContextAnalyzerConstructor, mock_gen_model, mock_genai_configure):
-        mock_analyzer_instance = MockContextAnalyzerConstructor.return_value
+    @patch.object(src.report_elaborator, 'ContextAnalyzer', autospec=True)
+    def test_elaborate_cache_invalidation_on_finding_change(self, MockedContextAnalyzer, mock_gen_model, mock_genai_configure):
+        mock_analyzer_instance = MockedContextAnalyzer.return_value
         mock_analyzer_instance.model = True 
         mock_analyzer_instance.api_key = "key_for_invalidation_test"
         mock_elaboration_text_v1 = "Elaboration for original finding."
@@ -521,7 +518,7 @@ class TestElaboratorCachingWithRealCache(unittest.TestCase):
         )
         self.assertEqual(result1, mock_elaboration_text_v1)
         mock_analyzer_instance.elaborate_on_match.assert_called_once()
-        MockContextAnalyzerConstructor.assert_called_once_with(api_key=test_api_key)
+        MockedContextAnalyzer.assert_called_once_with(api_key=test_api_key)
         mock_gen_model.assert_not_called()
         mock_genai_configure.assert_not_called()
 
@@ -551,9 +548,9 @@ class TestElaboratorCachingWithRealCache(unittest.TestCase):
         self.assertEqual(mock_analyzer_instance.elaborate_on_match.call_count, 2, 
                          "elaborate_on_match should be called again for a modified finding.")
         # ContextAnalyzer constructor should be called again for the second miss (total 2 times overall)
-        self.assertEqual(MockContextAnalyzerConstructor.call_count, 2)
+        self.assertEqual(MockedContextAnalyzer.call_count, 2)
         # Check that the last call was with the correct api_key, or check all calls if necessary
-        MockContextAnalyzerConstructor.assert_called_with(api_key=test_api_key) 
+        MockedContextAnalyzer.assert_called_with(api_key=test_api_key) 
         mock_gen_model.assert_not_called() # Still not called throughout
         mock_genai_configure.assert_not_called() # Still not called throughout
 
