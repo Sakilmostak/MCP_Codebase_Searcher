@@ -105,14 +105,24 @@ class Searcher:
                 return cached_result
             else:
                 logging.debug(f"Cache miss for search operation. First component of key: {key_components[0]}")
-                # logging.debug(f"Cache miss for search key derived from components: {key_components}")
-                # Proceed to actual search (logic below this block)
-                pass
+                # Proceed to actual search
+                # Perform the actual search
+                current_results = self._perform_actual_search(file_data_list) # Renamed to avoid confusion
+                
+                # After a successful search (cache miss), store the results in cache
+                # The key_components are already defined from the cache get attempt
+                self.cache_manager.set(key_components, current_results)
+                # TODO (Subtask 9.5): Add logging for cache set
+                # logging.info(f"Stored search results in cache. First component of key: {key_components[0]}")
+                return current_results # Return the freshly searched results
 
-        # If caching is disabled, cache_manager is None, or it's a cache miss, proceed with search:
+        # If caching was disabled or no cache_manager, perform search directly
+        return self._perform_actual_search(file_data_list)
+
+    def _perform_actual_search(self, file_data_list):
+        """Helper method to contain the core search logic."""
         all_results = []
         for file_path, timestamp in file_data_list: # Unpack path and timestamp
-            # Timestamp is not directly used in the lines below yet, but available.
             content = self._read_file_content(file_path)
             if content is None:
                 continue
