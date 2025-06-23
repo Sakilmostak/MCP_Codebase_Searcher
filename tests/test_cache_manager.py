@@ -5,6 +5,7 @@ import sys
 import shutil
 import io
 import time
+import tempfile
 
 # Add project root to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -107,16 +108,10 @@ class TestCacheManagerFunctionality(unittest.TestCase):
 
         self.manager = CacheManager(cache_dir=self.cache_dir, expiry_seconds=2)
 
-        # Patch 'print' in the cache_manager module to check calls to it for warnings
-        self.patcher_cache_manager_print = patch('src.cache_manager.print')
-        self.mock_cache_manager_print = self.patcher_cache_manager_print.start()
-        self.addCleanup(self.patcher_cache_manager_print.stop)
-        
-        # Keep patching builtins.print as well to suppress other potential prints if necessary,
-        # or if some prints in cache_manager are not going to sys.stderr explicitly.
-        self.patcher_builtins_print = patch('builtins.print')
-        self.mock_builtins_print = self.patcher_builtins_print.start()
-        self.addCleanup(self.patcher_builtins_print.stop)
+        # Patch 'logging.warning' in the cache_manager module for error handling tests
+        # This will be done per-test method where needed, e.g.:
+        # @patch('src.cache_manager.logging.warning')
+        # def test_get_error_handling(self, mock_logging_warning):
 
     def tearDown(self):
         if hasattr(self, 'manager') and self.manager:
@@ -183,57 +178,50 @@ class TestCacheManagerFunctionality(unittest.TestCase):
         self.assertIsNone(self.manager.get(("item1",)), "Item1 should not exist after clear_all.")
         self.assertIsNone(self.manager.get(("item2",)), "Item2 should not exist after clear_all.")
 
-    def test_get_error_handling(self):
+    @patch('src.cache_manager.logging.warning')
+    def test_get_error_handling(self, mock_logging_warning):
         with patch.object(self.manager.cache, 'get', side_effect=Exception("Disk Read Error")):
-            result = self.manager.get(("error_key",))
+            key_components = ("error_key_get",)
+            key_digest_short = self.manager._generate_key(key_components)[:8]
+            result = self.manager.get(key_components)
             self.assertIsNone(result)
-            # Check if print was called with the warning and file=sys.stderr
-            found_call = False
-            for call_args in self.mock_cache_manager_print.call_args_list:
-                args, kwargs = call_args
-                if args and "Warning: Cache GET operation failed" in args[0] and kwargs.get('file') == sys.stderr:
-                    found_call = True
-                    break
-            self.assertTrue(found_call, "Warning for GET error not printed to sys.stderr via src.cache_manager.print")
-        self.mock_cache_manager_print.reset_mock() # Reset for other tests
-
-    def test_set_error_handling(self):
-        with patch.object(self.manager.cache, 'set', side_effect=Exception("Disk Write Error")):
-            self.manager.set(("error_key",), "value")
-            found_call = False
-            for call_args in self.mock_cache_manager_print.call_args_list:
-                args, kwargs = call_args
-                if args and "Warning: Cache SET operation failed" in args[0] and kwargs.get('file') == sys.stderr:
-                    found_call = True
-                    break
-            self.assertTrue(found_call, "Warning for SET error not printed to sys.stderr via src.cache_manager.print")
-        self.mock_cache_manager_print.reset_mock()
-
-    def test_delete_error_handling(self):
-        with patch.object(self.manager.cache, 'delete', side_effect=Exception("Disk Delete Error")):
-            result = self.manager.delete(("error_key",))
-            self.assertEqual(result, 0)
-            found_call = False
-            for call_args in self.mock_cache_manager_print.call_args_list:
-                args, kwargs = call_args
-                if args and "Warning: Cache DELETE operation failed" in args[0] and kwargs.get('file') == sys.stderr:
-                    found_call = True
-                    break
-            self.assertTrue(found_call, "Warning for DELETE error not printed to sys.stderr via src.cache_manager.print")
-        self.mock_cache_manager_print.reset_mock()
             
-    def test_clear_all_error_handling(self):
+            expected_log = f"Cache GET operation failed for key digest '{key_digest_short}...'. Error: Disk Read Error"
+            found_call = any(expected_log in call_args[0][0] for call_args in mock_logging_warning.call_args_list)
+            self.assertTrue(found_call, f"Expected log for GET error not found. Logs: {mock_logging_warning.call_args_list}")
+
+    @patch('src.cache_manager.logging.warning')
+    def test_set_error_handling(self, mock_logging_warning):
+        with patch.object(self.manager.cache, 'set', side_effect=Exception("Disk Write Error")):
+            key_components = ("error_key_set",)
+            key_digest_short = self.manager._generate_key(key_components)[:8]
+            self.manager.set(key_components, "value")
+            
+            expected_log = f"Cache SET operation failed for key digest '{key_digest_short}...'. Error: Disk Write Error"
+            found_call = any(expected_log in call_args[0][0] for call_args in mock_logging_warning.call_args_list)
+            self.assertTrue(found_call, f"Expected log for SET error not found. Logs: {mock_logging_warning.call_args_list}")
+
+    @patch('src.cache_manager.logging.warning')
+    def test_delete_error_handling(self, mock_logging_warning):
+        with patch.object(self.manager.cache, 'delete', side_effect=Exception("Disk Delete Error")):
+            key_components = ("error_key_delete",)
+            key_digest_short = self.manager._generate_key(key_components)[:8]
+            result = self.manager.delete(key_components)
+            self.assertEqual(result, 0)
+            
+            expected_log = f"Cache DELETE operation failed for key digest '{key_digest_short}...'. Error: Disk Delete Error"
+            found_call = any(expected_log in call_args[0][0] for call_args in mock_logging_warning.call_args_list)
+            self.assertTrue(found_call, f"Expected log for DELETE error not found. Logs: {mock_logging_warning.call_args_list}")
+            
+    @patch('src.cache_manager.logging.warning')
+    def test_clear_all_error_handling(self, mock_logging_warning):
         with patch.object(self.manager.cache, 'clear', side_effect=Exception("Disk Clear Error")):
             result = self.manager.clear_all()
             self.assertEqual(result, 0)
-            found_call = False
-            for call_args in self.mock_cache_manager_print.call_args_list:
-                args, kwargs = call_args
-                if args and "Warning: Cache CLEAR_ALL operation failed" in args[0] and kwargs.get('file') == sys.stderr:
-                    found_call = True
-                    break
-            self.assertTrue(found_call, "Warning for CLEAR_ALL error not printed to sys.stderr via src.cache_manager.print")
-        self.mock_cache_manager_print.reset_mock()
+            
+            expected_log = f"Cache CLEAR_ALL operation failed for directory '{self.manager.cache_dir}'. Error: Disk Clear Error"
+            found_call = any(expected_log in call_args[0][0] for call_args in mock_logging_warning.call_args_list)
+            self.assertTrue(found_call, f"Expected log for CLEAR_ALL error not found. Logs: {mock_logging_warning.call_args_list}")
 
     def test_generate_key_functionality(self):
         """Comprehensive tests for _generate_key method."""
@@ -293,6 +281,72 @@ class TestCacheManagerFunctionality(unittest.TestCase):
         # For the one above, it should be.
         self.assertEqual(hash_ns1, hash_ns2, "Keys with identical non-JSON-serializable (via repr) objects should match if repr is identical.")
         self.assertNotEqual(hash_ns1, hash_ns3, "Keys with different non-JSON-serializable (via repr) objects should differ.")
+
+class TestCacheEviction(unittest.TestCase):
+    def setUp(self):
+        # Create a unique temporary directory for each test method to ensure isolation
+        self.test_cache_dir = tempfile.mkdtemp(prefix="eviction_test_cache_")
+        # Intentionally small size_limit for testing eviction
+        # size_limit should be greater than disk_min_file_size (default 32KB if not overridden)
+        # For this test, we'll add many small items, so the SQLite DB size will be the main factor initially.
+        # Let's set a size_limit that is reasonably small, e.g., 64KB (64 * 1024 bytes)
+        self.size_limit_bytes = 64 * 1024 
+        self.cache_manager = CacheManager(cache_dir=self.test_cache_dir, size_limit_bytes=self.size_limit_bytes, cull_limit=1) # cull_limit=1 for more aggressive culling
+
+    def tearDown(self):
+        if self.cache_manager:
+            self.cache_manager.close()
+        if os.path.exists(self.test_cache_dir):
+            shutil.rmtree(self.test_cache_dir, ignore_errors=True)
+
+    def test_automatic_eviction_on_size_limit(self):
+        # Add items to exceed the cache size limit and trigger automatic culling.
+        # Each item is small, but adding many should eventually hit the size_limit.
+        # The exact number of items depends on internal SQLite overhead and item storage.
+        num_items_to_add = 5000 # A sufficiently large number of small items
+        item_size_approx = 100  # Approx bytes per item (key + value + overhead)
+
+        for i in range(num_items_to_add):
+            key = f"key_{i}"
+            value = os.urandom(item_size_approx // 2) # small random value
+            self.cache_manager.set(key, value, expire=3600)
+            # It's hard to predict the exact volume due to SQLite behavior and file system block sizes.
+            # We are primarily testing that the cache *does not* grow indefinitely far beyond the limit.
+
+        final_volume = self.cache_manager.cache.volume()
+        # Check that the final volume is not excessively larger than the size_limit.
+        # Allow some leeway for SQLite overhead and the fact that culling might not bring it *exactly* to the limit.
+        # A common observation is that it might slightly exceed the limit before culling brings it down.
+        # And culling might not remove enough to go *below* the limit if remaining items are large or cull_limit is small.
+        # With cull_limit=1, it should try to remove one item at a time once the limit is hit.
+        # We expect the final volume to be *around* size_limit, not drastically larger.
+        # Let's assert it's not more than, say, 2 * size_limit as a loose check that culling is active.
+        # A tighter bound might be possible but depends heavily on diskcache internals.
+        self.assertLessEqual(final_volume, self.size_limit_bytes * 2, 
+                             f"Cache volume {final_volume} greatly exceeded size_limit {self.size_limit_bytes} despite culling.")
+
+        # A more robust check might involve seeing if *some* items were indeed evicted.
+        # This requires knowing which items *should* be there if no eviction happened.
+        # For now, the volume check is a good first step.
+        # To verify eviction happened, we can count the items. It should be less than num_items_to_add if eviction occurred.
+        # However, len(self.cache_manager.cache) includes expired items until .expire() or .cull() is called.
+        # .cull() is called internally by .set() if cull_limit > 0 and size_limit is reached.
+        # So, the number of items should be less than num_items_to_add *if* eviction happened.
+        
+        # Call expire() to remove any expired items to get a cleaner count for non-expired items.
+        # This is not strictly necessary for testing size-based eviction, but good practice.
+        self.cache_manager.cache.expire() 
+        final_item_count = len(self.cache_manager.cache)
+        
+        # If the total size of all items (num_items_to_add * item_size_approx) is much larger than size_limit,
+        # then final_item_count should be significantly less than num_items_to_add.
+        estimated_total_data_size = num_items_to_add * item_size_approx
+        if estimated_total_data_size > self.size_limit_bytes * 1.5: # If we expect significant eviction
+            self.assertLess(final_item_count, num_items_to_add, 
+                              f"Expected item count ({final_item_count}) to be less than added items ({num_items_to_add}) if eviction occurred.")
+        
+        # print(f"TestCacheEviction: Initial size_limit: {self.size_limit_bytes}, Final volume: {final_volume}, Final item count: {final_item_count}")
+
 
 if __name__ == '__main__':
     unittest.main() 

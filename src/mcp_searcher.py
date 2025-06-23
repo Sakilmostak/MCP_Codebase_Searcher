@@ -6,6 +6,8 @@ import sys
 import re # For Searcher's regex compilation and potential re.error
 import json # For output_generator
 from dotenv import load_dotenv # Added for explicit .env loading
+import logging # Added import
+from datetime import datetime
 
 # Direct absolute imports, as these modules are installed at the top level
 try:
@@ -126,6 +128,12 @@ def parse_arguments():
     return args
 
 def main():
+    """Main function to parse arguments and orchestrate the search or elaboration."""
+    # Basic logging configuration
+    logging.basicConfig(level=logging.INFO, 
+                        format='%(asctime)s - %(levelname)s - %(message)s',
+                        datefmt='%Y-%m-%d %H:%M:%S')
+
     args = parse_arguments()
     
     cache_manager = None # Initialize to None
@@ -197,9 +205,9 @@ def main():
                         query=args.query,
                         is_case_sensitive=args.case_sensitive,
                         is_regex=args.regex,
-                        context_lines=args.context
-                        # cache_manager=cache_manager, # To be added/used in Task 7
-                        # no_cache=args.no_cache      # To be added/used in Task 7
+                        context_lines=args.context,
+                        cache_manager=cache_manager,
+                        no_cache=args.no_cache
                     )
                 except ValueError as e: 
                     print(f"Error initializing Searcher: Invalid regular expression: {e}", file=sys.stderr)

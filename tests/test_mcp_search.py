@@ -5,6 +5,8 @@ import sys
 import re
 import builtins
 import io
+import tempfile
+import shutil
 
 # Add project root to sys.path
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -12,6 +14,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.mcp_search import Searcher
+from src.cache_manager import CacheManager
 
 class TestSearcher(unittest.TestCase):
     def setUp(self):
@@ -33,7 +36,6 @@ class TestSearcher(unittest.TestCase):
                 f.write(content)
 
     def tearDown(self):
-        import shutil
         if os.path.exists(self.test_dir):
             shutil.rmtree(self.test_dir)
 
@@ -272,12 +274,16 @@ class TestSearcher(unittest.TestCase):
 
     def test_search_files_non_existent_file(self):
         searcher = Searcher("test")
-        file_path = os.path.join(self.test_dir, "non_existent_file.txt")
+        test_file_path = os.path.join(self.test_dir, "non_existent_file.txt")
+        file_data_list = [(test_file_path, 0)] # Provide a dummy timestamp
+
         with patch('sys.stderr', new_callable=io.StringIO) as mock_err:
-            results = searcher.search_files([file_path])
+            results = searcher.search_files(file_data_list)
             self.assertEqual(len(results), 0)
+            # The error for non-existent file is handled in _read_file_content
+            # and it prints to stderr. We check if that part logs appropriately.
             # Check if the warning about the non-existent file was printed to stderr
-            self.assertIn(f"error reading file \'{file_path}\':", mock_err.getvalue().lower())
+            self.assertIn(f"error reading file \'{test_file_path}\':", mock_err.getvalue().lower())
 
     def test_get_line_info_from_char_offset(self):
         searcher = Searcher("test")
@@ -335,6 +341,86 @@ class TestSearcher(unittest.TestCase):
         self.assertEqual(line_num, 0)
         self.assertEqual(offset, len(content))
 
+# New Test Class for Caching
+class TestSearcherCaching(unittest.TestCase):
+    def setUp(self):
+        self.test_files_dir = tempfile.mkdtemp(prefix="search_files_")
+        self.temp_cache_dir = tempfile.mkdtemp(prefix="search_cache_")
+        self.cache_manager = CacheManager(cache_dir=self.temp_cache_dir)
+
+        self.sample_file_content = "Hello cache world\nSecond line for cache test\nAnother world here."
+        self.sample_file_path = os.path.join(self.test_files_dir, "cache_test_file.txt")
+        with open(self.sample_file_path, 'w', encoding='utf-8') as f:
+            f.write(self.sample_file_content)
+        self.sample_file_timestamp = os.path.getmtime(self.sample_file_path)
+
+    def tearDown(self):
+        if self.cache_manager:
+            self.cache_manager.close() # Correctly close the cache
+        if os.path.exists(self.temp_cache_dir): # Ensure temp_cache_dir is removed
+            shutil.rmtree(self.temp_cache_dir)
+        if os.path.exists(self.test_files_dir):
+            shutil.rmtree(self.test_files_dir)
+
+    def test_search_cache_hit_and_miss(self):
+        searcher = Searcher(
+            query="world", 
+            cache_manager=self.cache_manager, 
+            no_cache=False
+        )
+        
+        file_data_list = [(self.sample_file_path, self.sample_file_timestamp)]
+        mock_search_results = [
+            {"file_path": self.sample_file_path, "line_number": 1, "match_text": "world", "snippet": ">>>world<<<"}
+        ]
+
+        with patch.object(searcher, '_perform_actual_search', return_value=mock_search_results) as mock_actual_search:
+            # First call - should be a cache miss, so _perform_actual_search is called
+            results1 = searcher.search_files(file_data_list)
+            self.assertEqual(results1, mock_search_results)
+            mock_actual_search.assert_called_once_with(file_data_list)
+            
+            # Second call - should be a cache hit, so _perform_actual_search is NOT called again
+            results2 = searcher.search_files(file_data_list)
+            self.assertEqual(results2, mock_search_results)
+            # Assert that the mock was still only called once in total
+            mock_actual_search.assert_called_once() # Called once from the first call
+
+    def test_search_cache_invalidation_on_timestamp_change(self):
+        searcher = Searcher(
+            query="world", 
+            cache_manager=self.cache_manager, 
+            no_cache=False
+        )
+        
+        # Initial file data
+        file_data_list_v1 = [(self.sample_file_path, self.sample_file_timestamp)]
+        mock_search_results_v1 = [
+            {"file_path": self.sample_file_path, "line_number": 1, "match_text": "world", "snippet": "cache >>>world<<<"}
+        ]
+
+        with patch.object(searcher, '_perform_actual_search', return_value=mock_search_results_v1) as mock_actual_search:
+            # First call - cache miss
+            results1 = searcher.search_files(file_data_list_v1)
+            self.assertEqual(results1, mock_search_results_v1)
+            mock_actual_search.assert_called_once_with(file_data_list_v1)
+            
+            # Simulate file modification by changing the timestamp
+            new_timestamp = self.sample_file_timestamp + 100.0
+            file_data_list_v2 = [(self.sample_file_path, new_timestamp)]
+            mock_search_results_v2 = [
+                {"file_path": self.sample_file_path, "line_number": 3, "match_text": "world", "snippet": "Another >>>world<<<"} # Different results for v2
+            ]
+            
+            # Configure mock for the second call (which should be a miss again)
+            mock_actual_search.return_value = mock_search_results_v2 # Update mock return for the new call
+            
+            # Second call with new timestamp - should also be a cache miss
+            results2 = searcher.search_files(file_data_list_v2)
+            self.assertEqual(results2, mock_search_results_v2)
+            # _perform_actual_search should have been called again (total 2 times)
+            self.assertEqual(mock_actual_search.call_count, 2)
+            mock_actual_search.assert_called_with(file_data_list_v2) # Check last call args
 
 if __name__ == '__main__':
     unittest.main() 

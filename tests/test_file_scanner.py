@@ -14,6 +14,8 @@ if project_root not in sys.path:
 # Now import the module
 from src.file_scanner import FileScanner, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES, DEFAULT_BINARY_EXTENSIONS
 
+REAL_OS_PATH_GETMTIME = os.path.getmtime # Capture real function before any patches
+
 class TestFileScanner(unittest.TestCase):
     def setUp(self):
         # Basic scanner for most tests
@@ -188,9 +190,14 @@ class TestFileScanner(unittest.TestCase):
     def test_scan_directory_default(self):
         # Test with default exclusions
         scanner = FileScanner() # exclude_dot_items is True by default
-        # Make self.test_dir absolute for comparison
         abs_test_dir = os.path.abspath(self.test_dir)
-        scanned_files = set(scanner.scan_directory(abs_test_dir))
+        
+        results = scanner.scan_directory(abs_test_dir)
+        scanned_files_paths = set()
+        for path, timestamp in results:
+            scanned_files_paths.add(path)
+            self.assertIsInstance(timestamp, float)
+            self.assertGreater(timestamp, 0)
 
         expected_files = set([
             os.path.join(abs_test_dir, "file1.txt"),
@@ -200,13 +207,20 @@ class TestFileScanner(unittest.TestCase):
             os.path.join(abs_test_dir, "subdir", "subfile.txt"),
             # .hiddenfile.txt, .git/config, venv/file should be excluded by default
         ])
-        self.assertEqual(scanned_files, expected_files)
+        self.assertEqual(scanned_files_paths, expected_files)
 
     def test_scan_directory_include_hidden(self):
         scanner = FileScanner(exclude_dot_items=False)
         abs_test_dir = os.path.abspath(self.test_dir)
-        scanned_files = set(scanner.scan_directory(abs_test_dir))
-        expected_files = set([
+        
+        results = scanner.scan_directory(abs_test_dir)
+        scanned_files_paths = set()
+        for path, timestamp in results:
+            scanned_files_paths.add(path)
+            self.assertIsInstance(timestamp, float)
+            self.assertGreater(timestamp, 0)
+
+        expected_files_candidates = set([
             os.path.join(abs_test_dir, "file1.txt"),
             os.path.join(abs_test_dir, "file2.py"),
             os.path.join(abs_test_dir, "another.txt"),
@@ -221,7 +235,7 @@ class TestFileScanner(unittest.TestCase):
         # Filter out files that might be excluded by default dir/file exclusions 
         # because scan_directory itself applies these exclusions.
         filtered_expected = set()
-        for f_path in expected_files:
+        for f_path in expected_files_candidates:
             # Check if any part of the *relative* path from abs_test_dir would match default excluded dirs
             relative_to_test_dir = os.path.relpath(f_path, abs_test_dir)
             path_parts = relative_to_test_dir.split(os.sep)
@@ -236,7 +250,7 @@ class TestFileScanner(unittest.TestCase):
             
             if not is_in_default_excluded_dir:
                  filtered_expected.add(f_path)
-        self.assertEqual(scanned_files, filtered_expected)
+        self.assertEqual(scanned_files_paths, filtered_expected)
 
 
     def test_scan_directory_custom_exclude(self):
@@ -250,7 +264,15 @@ class TestFileScanner(unittest.TestCase):
             exclude_dot_items=True # Explicitly keep dot items excluded for this test
         )
         abs_test_dir = os.path.abspath(self.test_dir)
-        scanned_files = set(scanner.scan_directory(abs_test_dir))
+        
+        results = scanner.scan_directory(abs_test_dir)
+        scanned_files_paths = set()
+        for path, timestamp in results:
+            scanned_files_paths.add(path)
+            self.assertIsInstance(timestamp, float)
+            self.assertGreater(timestamp, 0)
+
+        # Expected files, considering custom exclusions
         expected_files = set([
             # os.path.join(abs_test_dir, "file1.txt"), # Excluded by custom_files
             os.path.join(abs_test_dir, "file2.py"),
@@ -258,7 +280,79 @@ class TestFileScanner(unittest.TestCase):
             # os.path.join(abs_test_dir, "custom_exclude.ceu"), # Excluded by custom_patterns
             # os.path.join(abs_test_dir, "subdir", "subfile.txt"), # Excluded by custom_dirs
         ])
-        self.assertEqual(scanned_files, expected_files)
+        self.assertEqual(scanned_files_paths, expected_files)
+
+    def test_scan_directory_timestamp_accuracy(self):
+        scanner = FileScanner()
+        abs_test_dir = os.path.abspath(self.test_dir)
+        
+        # Pick a file we know should be included
+        test_file_relative = "file1.txt"
+        test_file_abs = os.path.join(abs_test_dir, test_file_relative)
+        
+        # Get its timestamp directly
+        expected_timestamp = os.path.getmtime(test_file_abs)
+        
+        results = scanner.scan_directory(abs_test_dir)
+        found_file_data = None
+        for path, timestamp in results:
+            if path == test_file_abs:
+                found_file_data = (path, timestamp)
+                break
+        
+        self.assertIsNotNone(found_file_data, f"{test_file_abs} not found in scan results")
+        self.assertEqual(found_file_data[1], expected_timestamp, "Timestamp mismatch for file1.txt")
+
+    @patch('src.file_scanner.os.path.getmtime')
+    @patch('src.file_scanner.sys.stderr', new_callable=MagicMock) # Use MagicMock for stderr
+    def test_scan_directory_timestamp_oserror(self, mock_stderr, mock_getmtime):
+        scanner = FileScanner()
+        abs_test_dir = os.path.abspath(self.test_dir)
+
+        # File that will cause an OSError
+        error_file_relative = "file1.txt"
+        error_file_abs = os.path.join(abs_test_dir, error_file_relative)
+        
+        # Other files that should be processed normally
+        normal_file_relative = "file2.py"
+        normal_file_abs = os.path.join(abs_test_dir, normal_file_relative)
+        
+        # original_getmtime = os.path.getmtime # This would capture the mock due to patch context
+
+        def side_effect_getmtime(path):
+            if path == error_file_abs:
+                raise OSError("Test OSError for getmtime")
+            return REAL_OS_PATH_GETMTIME(path) # Call the truly original function
+        
+        mock_getmtime.side_effect = side_effect_getmtime
+        
+        results = scanner.scan_directory(abs_test_dir)
+        
+        # Check that error_file_abs is not in results
+        found_error_file = False
+        found_normal_file = False
+        for path, timestamp in results:
+            if path == error_file_abs:
+                found_error_file = True
+            if path == normal_file_abs:
+                found_normal_file = True
+                self.assertIsInstance(timestamp, float) # Check normal file's timestamp
+
+        self.assertFalse(found_error_file, f"{error_file_abs} should have been skipped due to OSError")
+        self.assertTrue(found_normal_file, f"{normal_file_abs} should have been included")
+        
+        # Check that a warning was printed to stderr
+        # mock_stderr.write.assert_called_once() # Check if write was called
+        # call_args_list gives you all calls, useful if there are multiple writes.
+        # Here we expect one warning related to error_file_abs.
+        # Check that any call to mock_stderr.write contained the error message
+        printed_to_stderr = False
+        for call in mock_stderr.write.call_args_list:
+            args, _ = call
+            if "Warning: Could not get timestamp for file" in args[0] and error_file_abs in args[0]:
+                printed_to_stderr = True
+                break
+        self.assertTrue(printed_to_stderr, "Warning message for OSError not printed to stderr")
 
 if __name__ == '__main__':
     unittest.main() 

@@ -56,34 +56,62 @@ class Searcher:
         char_offset_in_line = char_offset - line_starts[line_idx]
         return line_idx, char_offset_in_line
 
-    def search_files(self, file_data_list):
+    def search_files(self, file_data_input): # Renamed parameter for clarity
         """Searches for the query in a list of files, using their timestamp data.
 
         Args:
-            file_data_list (list): A list of tuples, where each tuple is (file_path, timestamp).
+            file_data_input (str | Tuple[str, float] | List[str] | List[Tuple[str, float]]):
+                Input representing file(s) to search. Can be:
+                - A single file path (str).
+                - A single tuple of (file_path, timestamp).
+                - A list of file paths (List[str]).
+                - A list of (file_path, timestamp) tuples (List[Tuple[str, float]]).
 
         Returns:
             list: A list of all match information dictionaries found across all files.
         """
-        # Initial validation of file_data_list (already present)
-        if not isinstance(file_data_list, list):
-            # ... (existing robust handling of file_data_list type) ...
-            # This block remains as is. For brevity, I'm not repeating it fully here.
-            # It ensures file_data_list is a list of (path, timestamp) tuples.
-            # Simplified for this diff, the actual logic for this is more complex:
-            if isinstance(file_data_list, tuple) and len(file_data_list) == 2 and isinstance(file_data_list[0], str):
-                file_data_list = [file_data_list]
-            elif isinstance(file_data_list, str):
-                try:
-                    timestamp = os.path.getmtime(file_data_list) if os.path.exists(file_data_list) else 0
-                    file_data_list = [(file_data_list, timestamp)]
-                except OSError:
-                     file_data_list = [(file_data_list, 0)] # Fallback timestamp
-            elif all(isinstance(item, str) for item in file_data_list): # if it's a list of paths
-                file_data_list = [(p, os.path.getmtime(p) if os.path.exists(p) else 0) for p in file_data_list]
-            else: # Fallback / error for unexpected type
-                print(f"Warning: search_files expected a list of (path, timestamp) tuples, received {type(file_data_list)}. Aborting search for this set.", file=sys.stderr)
-                return []
+        file_data_list_tuples = [] # This will hold the List[Tuple[str, float]]
+
+        if isinstance(file_data_input, str): # Single path string
+            try:
+                timestamp = os.path.getmtime(file_data_input) if os.path.exists(file_data_input) else 0.0
+                file_data_list_tuples = [(file_data_input, timestamp)]
+            except OSError as e:
+                logging.warning(f"OSError getting timestamp for '{file_data_input}': {e}. Using 0.0 as timestamp.")
+                file_data_list_tuples = [(file_data_input, 0.0)]
+        elif isinstance(file_data_input, tuple) and len(file_data_input) == 2 and isinstance(file_data_input[0], str) and isinstance(file_data_input[1], (int, float)):
+            # A single (path, timestamp) tuple
+            file_data_list_tuples = [file_data_input]
+        elif isinstance(file_data_input, list):
+            if not file_data_input: # Empty list
+                file_data_list_tuples = []
+            else:
+                # Check if it's a list of strings or list of (path,ts) tuples
+                is_list_of_strings = all(isinstance(item, str) for item in file_data_input)
+                is_list_of_tuples = all(isinstance(item, tuple) and len(item) == 2 and \
+                                        isinstance(item[0], str) and isinstance(item[1], (int, float)) \
+                                        for item in file_data_input)
+
+                if is_list_of_tuples:
+                    file_data_list_tuples = file_data_input # Already in correct format
+                elif is_list_of_strings:
+                    processed_list = []
+                    for path_str in file_data_input:
+                        try:
+                            timestamp = os.path.getmtime(path_str) if os.path.exists(path_str) else 0.0
+                            processed_list.append((path_str, timestamp))
+                        except OSError as e:
+                            logging.warning(f"OSError getting timestamp for '{path_str}': {e}. Using 0.0 as timestamp.")
+                            processed_list.append((path_str, 0.0))
+                    file_data_list_tuples = processed_list
+                else:
+                    logging.warning(f"search_files received a list with mixed or invalid content. Aborting. Content: {file_data_input}")
+                    return []
+        else:
+            logging.warning(f"search_files received invalid input type: {type(file_data_input)}. Expected str, tuple, or list. Aborting.")
+            return []
+
+        # At this point, file_data_list_tuples is correctly formatted List[Tuple[str, float]] or an empty list.
 
         if not self.no_cache and self.cache_manager:
             # Attempt to retrieve from cache
@@ -93,35 +121,31 @@ class Searcher:
                 self.is_case_sensitive,
                 self.is_regex,
                 self.context_lines,
-                file_data_list
+                file_data_list_tuples # Use the processed list
             )
             
+            logging.info(f"Checking cache for search operation: '{key_components[0]}'")
             cached_result = self.cache_manager.get(key_components)
 
             if cached_result is not None:
-                logging.info(f"Cache hit for search operation. First component of key: {key_components[0]}") # Avoid logging potentially large file_data_list
-                # For more detailed debug logging of the key if needed:
-                # logging.debug(f"Cache hit for search key derived from components: {key_components}")
+                # logging.info(f"Cache hit for search operation. First component of key: {key_components[0]}") # CacheManager logs this
                 return cached_result
             else:
-                logging.debug(f"Cache miss for search operation. First component of key: {key_components[0]}")
+                # logging.debug(f"Cache miss for search operation. First component of key: {key_components[0]}") # CacheManager logs this
                 # Proceed to actual search
-                # Perform the actual search
-                current_results = self._perform_actual_search(file_data_list) # Renamed to avoid confusion
+                current_results = self._perform_actual_search(file_data_list_tuples) # Pass processed list
                 
-                # After a successful search (cache miss), store the results in cache
-                # The key_components are already defined from the cache get attempt
                 self.cache_manager.set(key_components, current_results)
                 logging.info(f"Stored search results in cache. First component of key: {key_components[0]}")
-                return current_results # Return the freshly searched results
+                return current_results
 
         # If caching was disabled or no cache_manager, perform search directly
-        return self._perform_actual_search(file_data_list)
+        return self._perform_actual_search(file_data_list_tuples) # Pass processed list
 
-    def _perform_actual_search(self, file_data_list):
+    def _perform_actual_search(self, file_data_list_tuples): # Parameter name updated
         """Helper method to contain the core search logic."""
         all_results = []
-        for file_path, timestamp in file_data_list: # Unpack path and timestamp
+        for file_path, timestamp in file_data_list_tuples: # Unpack path and timestamp
             content = self._read_file_content(file_path)
             if content is None:
                 continue

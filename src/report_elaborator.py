@@ -2,6 +2,7 @@ import json
 import sys
 import os # For API key loading, and reading full file content
 import hashlib # Added for hashing
+import logging # Added import
 
 # Direct import, as mcp_elaborate.py is installed as a top-level module
 from mcp_elaborate import ContextAnalyzer
@@ -62,14 +63,12 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
             # and could point to different configurations or access levels.
             cache_key_components = ('elaborate', finding_hash, context_window_lines, api_key)
             
-            cached_elaboration = cache_manager.get(cache_key_components)
+            logging.info(f"Checking cache for elaborate finding ID {finding_index} (Operation: '{cache_key_components[0]}')")
+            cached_elaboration = cache_manager.get(cache_key_components) # CacheManager.get now handles hit/miss logging
             if cached_elaboration is not None:
-                print(f"Cache hit for elaborate finding ID {finding_index} (key: {cache_manager._generate_key(cache_key_components)[:12]}...).", file=sys.stderr)
                 return cached_elaboration
-            else:
-                print(f"Cache miss for elaborate finding ID {finding_index} (key: {cache_manager._generate_key(cache_key_components)[:12]}...).", file=sys.stderr)
         except Exception as e:
-            print(f"Warning: Cache GET operation failed during elaborate: {e}", file=sys.stderr)
+            logging.warning(f"Cache GET operation failed during elaborate finding ID {finding_index}: {e}")
 
     source_file_path = found_finding['file_path']
     full_file_content = None
@@ -82,9 +81,9 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
         with open(source_file_path, 'r', encoding='utf-8') as sf:
             full_file_content = sf.read()
     except FileNotFoundError:
-        print(f"Warning: Source file '{source_file_path}' for finding {finding_index} not found. Proceeding with snippet only.", file=sys.stderr)
+        logging.warning(f"Source file '{source_file_path}' for finding {finding_index} not found. Proceeding with snippet only.")
     except Exception as e:
-        print(f"Warning: Could not read source file '{source_file_path}': {e}. Proceeding with snippet only.", file=sys.stderr)
+        logging.warning(f"Could not read source file '{source_file_path}': {e}. Proceeding with snippet only.")
 
     try:
         analyzer = ContextAnalyzer(api_key=api_key)
@@ -106,9 +105,9 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
         if cache_manager and not no_cache and cache_key_components and not elaboration.startswith("Error:"):
             try:
                 cache_manager.set(cache_key_components, elaboration)
-                print(f"Cached elaborate result for finding ID {finding_index} (key: {cache_manager._generate_key(cache_key_components)[:12]}...).", file=sys.stderr)
+                logging.info(f"Stored elaborate result in cache for finding ID {finding_index} (Operation: '{cache_key_components[0]}')")
             except Exception as e:
-                print(f"Warning: Cache SET operation failed during elaborate: {e}", file=sys.stderr)
+                logging.warning(f"Cache SET operation failed during elaborate finding ID {finding_index}: {e}")
         
         return elaboration
     except Exception as e:

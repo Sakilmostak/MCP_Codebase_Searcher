@@ -75,7 +75,9 @@ class TestMcpSearcher(unittest.TestCase):
     # --- Tests for the 'elaborate' command ---
 
     @patch('src.mcp_searcher.elaborate_finding')
-    def test_elaborate_command_success(self, mock_elaborate_finding):
+    @patch('os.getenv') # New patch for os.getenv
+    def test_elaborate_command_success(self, mock_os_getenv, mock_elaborate_finding): # mock_os_getenv from inner patch, mock_elaborate_finding from outer
+        mock_os_getenv.return_value = None # Ensure no env var API key is found
         mock_elaborate_finding.return_value = "Mocked elaboration successful!"
         
         report_path = os.path.join(self.test_dir, 'sample_report.json')
@@ -176,8 +178,10 @@ class TestMcpSearcher(unittest.TestCase):
         self.assertIn("the following arguments are required: --finding-id", stderr2.lower())
 
     @patch('src.mcp_searcher.elaborate_finding')
-    @patch('json.load') # Also mock json.load for precise control over config loading
-    def test_elaborate_command_config_file_logic(self, mock_json_load, mock_elaborate_finding):
+    @patch('json.load') 
+    @patch('os.getenv') # New patch for os.getenv
+    def test_elaborate_command_config_file_logic(self, mock_os_getenv, mock_json_load, mock_elaborate_finding): # mock_os_getenv from innermost, then mock_json_load, then mock_elaborate_finding
+        mock_os_getenv.return_value = None # Default to no env var API key for these tests
         mock_elaborate_finding.return_value = "Config key used."
         
         # 1. Test with config file that has the key
@@ -338,15 +342,69 @@ class TestMcpSearcher(unittest.TestCase):
         mock_cache_instance = MockCacheManager.return_value
         mock_cache_instance.close.assert_called_once()
 
-    def test_no_cache_flag_effect_placeholder(self):
-        # This test will be more meaningful when Searcher/elaborate_finding use the flag
-        # For now, ensure it parses and CacheManager is still closed.
-        with patch('src.mcp_searcher.CacheManager') as MockCacheManager, \
-             patch('src.mcp_searcher.Searcher') as MockSearcher: # Corrected: removed colon and added 'as MockSearcher'
-            args = ['--no-cache', 'search', 'q', os.devnull]
-            self.run_main_with_args(args)
-            MockCacheManager.assert_called_once() # Instantiated
-            MockCacheManager.return_value.close.assert_called_once() # Closed
+    @patch('src.mcp_searcher.CacheManager')
+    @patch('src.mcp_searcher.Searcher')
+    @patch('src.mcp_searcher.FileScanner')
+    def test_search_with_no_cache_flag(self, MockFileScanner, MockSearcher, MockCacheManager):
+        mock_scanner_instance = MockFileScanner.return_value
+        dummy_file_path = os.path.join(self.test_dir, 'dummy_search_file_no_cache.txt')
+        with open(dummy_file_path, 'w') as f:
+            f.write("content with query for no_cache test")
+        
+        # FileScanner.scan_directory returns a list of (path, timestamp) tuples
+        # For a direct file path, main() calls os.path.isfile and then scanner._is_excluded / _is_binary
+        mock_scanner_instance._is_excluded.return_value = False
+        mock_scanner_instance._is_binary.return_value = False
+        # If a directory were passed, scan_directory would be called. 
+        # For a direct file, it's added if not excluded/binary.
+        # The Searcher then receives a list of these validated file paths.
+
+        mock_searcher_instance = MockSearcher.return_value
+        mock_searcher_instance.search_files.return_value = [{'file_path': dummy_file_path, 'matches': [{'line_number': 1, 'line_text': 'content with query for no_cache test', 'match_text': 'query'}]}]
+
+        mock_cache_manager_instance = MockCacheManager.return_value
+
+        # Corrected: Global cache args before the subcommand 'search'
+        args = ['--no-cache', '--cache-dir', self.test_temp_cache_dir, 'search', 'query', dummy_file_path]
+        self.run_main_with_args(args)
+
+        MockSearcher.assert_called_once()
+        called_args, called_kwargs = MockSearcher.call_args
+        self.assertTrue(called_kwargs.get('no_cache'))
+        self.assertIs(called_kwargs.get('cache_manager'), mock_cache_manager_instance)
+
+        mock_cache_manager_instance.get.assert_not_called()
+        mock_cache_manager_instance.set.assert_not_called()
+        mock_searcher_instance.search_files.assert_called()
+
+
+    @patch('src.mcp_searcher.CacheManager')
+    @patch('src.mcp_searcher.elaborate_finding')
+    def test_elaborate_with_no_cache_flag(self, mock_elaborate_finding, MockCacheManager):
+        mock_elaborate_finding.return_value = "Elaboration (no-cache) complete."
+        mock_cache_manager_instance = MockCacheManager.return_value
+        
+        report_path = os.path.join(self.test_dir, 'report_for_nocache_elaborate.json')
+        with open(report_path, 'w', encoding='utf-8') as f:
+            json.dump([{"file_path": "e.py", "line_number":1, "snippet":"s", "match_text":"m"}],f)
+
+        # Corrected: Global cache args before the subcommand 'elaborate'
+        args = [
+            '--no-cache', 
+            '--cache-dir', self.test_temp_cache_dir,
+            'elaborate', 
+            '--report-file', report_path, 
+            '--finding-id', '0'
+        ]
+        stdout, stderr, exit_code, _ = self.run_main_with_args(args)
+        
+        self.assertEqual(exit_code, 0, f"STDOUT: {stdout}\\nSTDERR: {stderr}")
+        self.assertIn("Elaboration (no-cache) complete.", stdout)
+        
+        mock_elaborate_finding.assert_called_once()
+        _, called_kwargs = mock_elaborate_finding.call_args
+        self.assertTrue(called_kwargs.get('no_cache'))
+        self.assertIs(called_kwargs.get('cache_manager'), mock_cache_manager_instance)
 
 if __name__ == '__main__':
     unittest.main() 

@@ -3,26 +3,36 @@ import os
 import hashlib
 import json
 import sys
+import logging
 
 DEFAULT_CACHE_DIR = os.path.expanduser("~/.cache/mcp_codebase_searcher")
 DEFAULT_EXPIRY_SECONDS = 7 * 24 * 60 * 60  # 7 days
 DEFAULT_CACHE_SIZE_LIMIT_MB = 100 # 100 MB
 
 class CacheManager:
-    def __init__(self, cache_dir=None, expiry_seconds=None, cache_size_limit_mb=None):
+    def __init__(self, cache_dir=None, expiry_seconds=None, cache_size_limit_mb=None, size_limit_bytes=None, cull_limit=None):
         self.cache_dir = cache_dir if cache_dir else DEFAULT_CACHE_DIR
         self.expiry_seconds = expiry_seconds if expiry_seconds is not None else DEFAULT_EXPIRY_SECONDS
         
-        # diskcache uses bytes for size_limit
-        self.cache_size_limit_bytes = (cache_size_limit_mb if cache_size_limit_mb is not None else DEFAULT_CACHE_SIZE_LIMIT_MB) * 1024 * 1024
+        if size_limit_bytes is not None:
+            self.cache_size_limit_bytes = size_limit_bytes
+        elif cache_size_limit_mb is not None:
+            self.cache_size_limit_bytes = cache_size_limit_mb * 1024 * 1024
+        else:
+            self.cache_size_limit_bytes = DEFAULT_CACHE_SIZE_LIMIT_MB * 1024 * 1024
 
         os.makedirs(self.cache_dir, exist_ok=True)
         
+        # Prepare arguments for diskcache.Cache
+        cache_args = {
+            'size_limit': self.cache_size_limit_bytes
+        }
+        if cull_limit is not None:
+            cache_args['cull_limit'] = cull_limit
+
         self.cache = diskcache.Cache(
             self.cache_dir,
-            size_limit=self.cache_size_limit_bytes
-            # Default eviction policy is LRU, which is fine.
-            # Default timeout for operations is also fine for now.
+            **cache_args
         )
         # Note: diskcache handles expiry on a per-item basis when set,
         # or globally via its own mechanisms if items are added without explicit expiry.
@@ -71,9 +81,25 @@ class CacheManager:
         cache_key = self._generate_key(key_components)
         # print(f"DEBUG: Cache GET attempt for key: {cache_key} (from components: {key_components})")
         try:
-            return self.cache.get(cache_key)
+            value = self.cache.get(cache_key)
+            if value is not None:
+                if isinstance(key_components, tuple) and key_components:
+                    logging.info(f"Cache hit for operation: '{key_components[0]}'. Key digest: {cache_key[:8]}...")
+                else:
+                    logging.info(f"Cache hit. Key digest: {cache_key[:8]}...")
+                # For more detailed debug logging of the key if needed:
+                # logging.debug(f"Cache hit for key derived from components: {key_components}")
+            else:
+                if isinstance(key_components, tuple) and key_components:
+                    logging.info(f"Cache miss for operation: '{key_components[0]}'. Key digest: {cache_key[:8]}...")
+                else:
+                    logging.info(f"Cache miss. Key digest: {cache_key[:8]}...")
+                # For more detailed debug logging of the key if needed:
+                # logging.debug(f"Cache miss for key derived from components: {key_components}")
+            return value
         except Exception as e:
-            print(f"Warning: Cache GET operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr)
+            logging.warning(f"Cache GET operation failed for key digest '{cache_key[:8]}...'. Error: {e}")
+            # print(f"Warning: Cache GET operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr) # Original print
             return None
 
     def set(self, key_components, value, expire=None):
@@ -83,7 +109,8 @@ class CacheManager:
         try:
             self.cache.set(cache_key, value, expire=effective_expire)
         except Exception as e:
-            print(f"Warning: Cache SET operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr)
+            logging.warning(f"Cache SET operation failed for key digest '{cache_key[:8]}...'. Error: {e}")
+            # print(f"Warning: Cache SET operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr) # Original print
 
     def delete(self, key_components):
         cache_key = self._generate_key(key_components)
@@ -91,17 +118,21 @@ class CacheManager:
         try:
             return self.cache.delete(cache_key) # Returns number of keys deleted (0 or 1)
         except Exception as e:
-            print(f"Warning: Cache DELETE operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr)
+            logging.warning(f"Cache DELETE operation failed for key digest '{cache_key[:8]}...'. Error: {e}")
+            # print(f"Warning: Cache DELETE operation failed for key '{cache_key}'. Error: {e}", file=sys.stderr) # Original print
             return 0 # Indicate no keys were deleted in case of error
 
     def clear_all(self):
+        logging.info(f"Attempting to clear all cache from directory: {self.cache_dir}")
         # print(f"DEBUG: Clearing all cache from {self.cache_dir}")
         try:
             count = self.cache.clear()
+            logging.info(f"Successfully cleared {count} items from cache at {self.cache_dir}.")
             # print(f"DEBUG: Cleared {count} items.")
             return count
         except Exception as e:
-            print(f"Warning: Cache CLEAR_ALL operation failed for directory '{self.cache_dir}'. Error: {e}", file=sys.stderr)
+            logging.warning(f"Cache CLEAR_ALL operation failed for directory '{self.cache_dir}'. Error: {e}")
+            # print(f"Warning: Cache CLEAR_ALL operation failed for directory '{self.cache_dir}'. Error: {e}", file=sys.stderr) # Original print
             return 0 # Indicate no items were cleared
 
     def close(self):

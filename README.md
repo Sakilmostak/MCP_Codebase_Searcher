@@ -41,6 +41,43 @@ GOOGLE_API_KEY="YOUR_API_KEY_HERE"
 ```
 The tool uses `python-dotenv` to load this if available in the working directory.
 
+## Caching
+
+`mcp-codebase-searcher` implements a caching mechanism to improve performance for repeated search and elaboration operations. This feature is particularly useful when working on the same codebase or re-visiting previous findings.
+
+The cache stores results of search queries and elaboration outputs. When a similar operation is performed, the tool can retrieve the result from the cache instead of re-processing, saving time and, in the case of elaboration, API calls.
+
+This functionality is powered by the `diskcache` library.
+
+**Default Cache Location:**
+By default, cache files are stored in `~/.cache/mcp_codebase_searcher` (i.e., in a directory named `mcp_codebase_searcher` within your user's standard cache directory).
+
+**Caching CLI Arguments:**
+
+The following command-line arguments allow you to control the caching behavior:
+
+*   `--no-cache`:
+    *   Disables caching entirely for the current run. Neither reading from nor writing to the cache will occur.
+
+*   `--clear-cache`:
+    *   Clears all data from the cache directory before the current operation proceeds. This is useful if you suspect the cache is stale or want to free up disk space.
+
+*   `--cache-dir DIRECTORY`:
+    *   Specifies a custom directory to store cache files. If the directory does not exist, the tool will attempt to create it.
+    *   Example: `--cache-dir /tmp/my_search_cache`
+
+*   `--cache-expiry DAYS`:
+    *   Sets the default expiry time for new cache entries in days. Cached items older than this will be considered stale and re-fetched on the next request.
+    *   Default: `7` days.
+    *   Example: `--cache-expiry 3` (sets expiry to 3 days)
+
+*   `--cache-size-limit MB`:
+    *   Sets an approximate size limit for the cache directory in Megabytes (MB). When the cache approaches this limit, older or less frequently used items may be evicted to make space.
+    *   Default: `100` MB.
+    *   Example: `--cache-size-limit 250` (sets limit to 250 MB)
+
+These caching options provide flexibility in managing how search and elaboration results are stored and reused, allowing you to balance performance benefits with disk space usage and data freshness.
+
 **3. Development / Manual Installation (from source):**
 
 If you want to develop the tool or install it manually from the source code:
