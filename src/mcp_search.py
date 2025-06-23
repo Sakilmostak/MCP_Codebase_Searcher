@@ -85,33 +85,32 @@ class Searcher:
                 return []
 
         if not self.no_cache and self.cache_manager:
-            # Attempt to retrieve from cache (Subtasks 8.3, 8.4, 8.5 will fill this)
+            # Attempt to retrieve from cache
             # 1. Collect all necessary components for the cache key.
-            #    This includes self.query, self.is_case_sensitive, self.is_regex,
-            #    self.context_lines, and the file_data_list itself.
-            # key_components = (
-            #     "search_operation", # Identifier for the operation type
-            #     self.query,
-            #     self.is_case_sensitive,
-            #     self.is_regex,
-            #     self.context_lines,
-            #     # file_data_list will be processed by _generate_key into a dict
-            #     # Ensure it's sorted or consistently ordered if that matters before _generate_key
-            #     # For now, CacheManager._generate_key handles list of tuples by converting to dict
-            #     file_data_list
-            # )
-            # search_cache_key = self.cache_manager._generate_key(key_components)
-            # cached_result = self.cache_manager.get(key_components) # Pass components directly
+            key_components = (
+                "search_operation", # Identifier for the operation type
+                self.query,
+                self.is_case_sensitive,
+                self.is_regex,
+                self.context_lines,
+                # file_data_list is a list of (path, timestamp) tuples.
+                # CacheManager.get() will pass this to _generate_key(),
+                # which converts it to a dict {path: ts} for stable serialization.
+                file_data_list
+            )
+            
+            # search_cache_key = self.cache_manager._generate_key(key_components) # _generate_key is internal to CacheManager
+            cached_result = self.cache_manager.get(key_components) # Pass components tuple directly
 
             # if cached_result is not None:
-            #     # TODO: Add logging for cache hit (INFO level)
-            #     print(f"DEBUG: Cache hit for search key derived from: {key_components}", file=sys.stderr)
+            #     # TODO: Add logging for cache hit (INFO level) (Subtask 8.5)
+            #     # print(f"DEBUG: Cache hit for search key derived from: {key_components}", file=sys.stderr)
             #     return cached_result
             # else:
-            #     # TODO: Add logging for cache miss (DEBUG/INFO level)
-            #     print(f"DEBUG: Cache miss for search key derived from: {key_components}", file=sys.stderr)
+            #     # TODO: Add logging for cache miss (DEBUG/INFO level) (Subtask 8.5)
+            #     # print(f"DEBUG: Cache miss for search key derived from: {key_components}", file=sys.stderr)
             #     pass # Proceed to actual search
-            pass # Placeholder for actual cache logic
+            pass # Placeholder for Subtask 8.5 logic (handling the cached_result)
 
         # If caching is disabled, cache_manager is None, or it's a cache miss, proceed with search:
         all_results = []
