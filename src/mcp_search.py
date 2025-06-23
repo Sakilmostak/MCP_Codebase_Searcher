@@ -8,7 +8,7 @@ import sys # Added for printing to stderr
 class Searcher:
     """Handles searching for a query within a list of files."""
 
-    def __init__(self, query, is_case_sensitive=False, is_regex=False, context_lines=3):
+    def __init__(self, query, is_case_sensitive=False, is_regex=False, context_lines=3, cache_manager=None, no_cache=False):
         """
         Initializes the Searcher.
 
@@ -18,11 +18,17 @@ class Searcher:
             is_regex (bool, optional): Whether the query is a regex pattern. Defaults to False.
             context_lines (int, optional): Number of lines of context to show before and after a match.
                                          Defaults to 3.
+            cache_manager (CacheManager, optional): An instance of CacheManager for caching results.
+                                                  Defaults to None (caching disabled).
+            no_cache (bool, optional): If True, caching is explicitly disabled for this Searcher instance.
+                                       Defaults to False.
         """
         self.query = query
         self.is_case_sensitive = is_case_sensitive
         self.is_regex = is_regex
         self.context_lines = context_lines
+        self.cache_manager = cache_manager
+        self.no_cache = no_cache # If true, overrides cache_manager presence
 
         if self.is_regex:
             try:
@@ -49,13 +55,44 @@ class Searcher:
         char_offset_in_line = char_offset - line_starts[line_idx]
         return line_idx, char_offset_in_line
 
-    def search_files(self, file_paths):
-        """Searches for the query in a list of files."""
-        all_results = []
-        if not isinstance(file_paths, list):
-            file_paths = [file_paths]
+    def search_files(self, file_data_list):
+        """Searches for the query in a list of files, using their timestamp data.
 
-        for file_path in file_paths:
+        Args:
+            file_data_list (list): A list of tuples, where each tuple is (file_path, timestamp).
+
+        Returns:
+            list: A list of all match information dictionaries found across all files.
+        """
+        all_results = []
+        if not isinstance(file_data_list, list):
+            # This case should ideally not be hit if called correctly from mcp_searcher.py
+            # For robustness, handle if a single (path, ts) tuple or just path string is passed.
+            if isinstance(file_data_list, tuple) and len(file_data_list) == 2 and isinstance(file_data_list[0], str):
+                file_data_list = [file_data_list]
+            elif isinstance(file_data_list, str):
+                print("Warning: search_files received a single path string. Timestamp information will be missing for cache key generation if caching is active.", file=sys.stderr)
+                # Attempt to get timestamp, or use a placeholder if not possible for this ad-hoc call
+                try:
+                    timestamp = os.path.getmtime(file_data_list) if os.path.exists(file_data_list) else 0
+                    file_data_list = [(file_data_list, timestamp)]
+                except OSError:
+                     file_data_list = [(file_data_list, 0)] # Fallback timestamp
+            else:
+                print(f"Warning: search_files expected a list of (path, timestamp) tuples, received {type(file_data_list)}. Proceeding, but caching might be affected.", file=sys.stderr)
+                # Attempt to treat as list of paths if possible, else behavior is undefined.
+                # This path is risky and ideally should be an error or handled by caller.
+                if all(isinstance(item, str) for item in file_data_list): # if it's a list of paths
+                    file_data_list = [(p, os.path.getmtime(p) if os.path.exists(p) else 0) for p in file_data_list]
+                else:
+                    return [] # Or raise error
+
+        # TODO (Subtask 8.2+): Add caching logic here using self.cache_manager and self.no_cache
+        # The caching logic will wrap the actual search operation.
+        # For now, proceed with direct search.
+
+        for file_path, timestamp in file_data_list: # Unpack path and timestamp
+            # Timestamp is not directly used in the lines below yet, but available.
             content = self._read_file_content(file_path)
             if content is None:
                 continue
