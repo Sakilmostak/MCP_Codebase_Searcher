@@ -46,16 +46,16 @@ class FileScanner:
 
     def scan_directory(self, root_path):
         """
-        Scans the given directory and returns a list of non-excluded, non-binary files.
-        (Initially, this will just collect all files; filtering will be added later)
+        Scans the given directory and returns a list of non-excluded, non-binary files
+        along with their last modification timestamps.
 
         Args:
             root_path (str): The root directory path to start scanning from.
 
         Returns:
-            list: A list of absolute paths to files found.
+            list: A list of tuples, where each tuple is (absolute_file_path, modification_timestamp).
         """
-        collected_files = []
+        collected_file_data = []
         normalized_root_path = os.path.abspath(os.path.expanduser(root_path))
 
         if not os.path.isdir(normalized_root_path):
@@ -77,9 +77,13 @@ class FileScanner:
                 is_binary_flag = self._is_binary(file_path)
 
                 if not is_excluded_flag and not is_binary_flag:
-                    collected_files.append(file_path)
+                    try:
+                        timestamp = os.path.getmtime(file_path)
+                        collected_file_data.append((file_path, timestamp))
+                    except OSError as e:
+                        print(f"Warning: Could not get timestamp for file {file_path}: {e}. Skipping file.", file=sys.stderr)
         
-        return collected_files
+        return collected_file_data
 
     def _is_excluded(self, path_to_check, scan_root_path, is_dir=False):
         """
@@ -207,7 +211,7 @@ if __name__ == '__main__':
     
     # Example of how to use FileScanner if run directly (optional):
     # scanner = FileScanner()
-    # files = scanner.scan_directory('.') # Scan current directory
-    # print(f"Scanned files in current directory: {len(files)}")
-    # for f in files[:5]: # Print first 5 found
-    #     print(f"  {f}") 
+    # file_data = scanner.scan_directory('.') # Scan current directory
+    # print(f"Scanned files in current directory: {len(file_data)}")
+    # for f_path, ts in file_data[:5]: # Print first 5 found
+    #     print(f"  {f_path} (timestamp: {ts})") 
