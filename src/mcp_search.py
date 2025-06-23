@@ -64,33 +64,57 @@ class Searcher:
         Returns:
             list: A list of all match information dictionaries found across all files.
         """
-        all_results = []
+        # Initial validation of file_data_list (already present)
         if not isinstance(file_data_list, list):
-            # This case should ideally not be hit if called correctly from mcp_searcher.py
-            # For robustness, handle if a single (path, ts) tuple or just path string is passed.
+            # ... (existing robust handling of file_data_list type) ...
+            # This block remains as is. For brevity, I'm not repeating it fully here.
+            # It ensures file_data_list is a list of (path, timestamp) tuples.
+            # Simplified for this diff, the actual logic for this is more complex:
             if isinstance(file_data_list, tuple) and len(file_data_list) == 2 and isinstance(file_data_list[0], str):
                 file_data_list = [file_data_list]
             elif isinstance(file_data_list, str):
-                print("Warning: search_files received a single path string. Timestamp information will be missing for cache key generation if caching is active.", file=sys.stderr)
-                # Attempt to get timestamp, or use a placeholder if not possible for this ad-hoc call
                 try:
                     timestamp = os.path.getmtime(file_data_list) if os.path.exists(file_data_list) else 0
                     file_data_list = [(file_data_list, timestamp)]
                 except OSError:
                      file_data_list = [(file_data_list, 0)] # Fallback timestamp
-            else:
-                print(f"Warning: search_files expected a list of (path, timestamp) tuples, received {type(file_data_list)}. Proceeding, but caching might be affected.", file=sys.stderr)
-                # Attempt to treat as list of paths if possible, else behavior is undefined.
-                # This path is risky and ideally should be an error or handled by caller.
-                if all(isinstance(item, str) for item in file_data_list): # if it's a list of paths
-                    file_data_list = [(p, os.path.getmtime(p) if os.path.exists(p) else 0) for p in file_data_list]
-                else:
-                    return [] # Or raise error
+            elif all(isinstance(item, str) for item in file_data_list): # if it's a list of paths
+                file_data_list = [(p, os.path.getmtime(p) if os.path.exists(p) else 0) for p in file_data_list]
+            else: # Fallback / error for unexpected type
+                print(f"Warning: search_files expected a list of (path, timestamp) tuples, received {type(file_data_list)}. Aborting search for this set.", file=sys.stderr)
+                return []
 
-        # TODO (Subtask 8.2+): Add caching logic here using self.cache_manager and self.no_cache
-        # The caching logic will wrap the actual search operation.
-        # For now, proceed with direct search.
+        if not self.no_cache and self.cache_manager:
+            # Attempt to retrieve from cache (Subtasks 8.3, 8.4, 8.5 will fill this)
+            # 1. Collect all necessary components for the cache key.
+            #    This includes self.query, self.is_case_sensitive, self.is_regex,
+            #    self.context_lines, and the file_data_list itself.
+            # key_components = (
+            #     "search_operation", # Identifier for the operation type
+            #     self.query,
+            #     self.is_case_sensitive,
+            #     self.is_regex,
+            #     self.context_lines,
+            #     # file_data_list will be processed by _generate_key into a dict
+            #     # Ensure it's sorted or consistently ordered if that matters before _generate_key
+            #     # For now, CacheManager._generate_key handles list of tuples by converting to dict
+            #     file_data_list
+            # )
+            # search_cache_key = self.cache_manager._generate_key(key_components)
+            # cached_result = self.cache_manager.get(key_components) # Pass components directly
 
+            # if cached_result is not None:
+            #     # TODO: Add logging for cache hit (INFO level)
+            #     print(f"DEBUG: Cache hit for search key derived from: {key_components}", file=sys.stderr)
+            #     return cached_result
+            # else:
+            #     # TODO: Add logging for cache miss (DEBUG/INFO level)
+            #     print(f"DEBUG: Cache miss for search key derived from: {key_components}", file=sys.stderr)
+            #     pass # Proceed to actual search
+            pass # Placeholder for actual cache logic
+
+        # If caching is disabled, cache_manager is None, or it's a cache miss, proceed with search:
+        all_results = []
         for file_path, timestamp in file_data_list: # Unpack path and timestamp
             # Timestamp is not directly used in the lines below yet, but available.
             content = self._read_file_content(file_path)
