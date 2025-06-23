@@ -112,8 +112,7 @@ class Searcher:
                 # After a successful search (cache miss), store the results in cache
                 # The key_components are already defined from the cache get attempt
                 self.cache_manager.set(key_components, current_results)
-                # TODO (Subtask 9.5): Add logging for cache set
-                # logging.info(f"Stored search results in cache. First component of key: {key_components[0]}")
+                logging.info(f"Stored search results in cache. First component of key: {key_components[0]}")
                 return current_results # Return the freshly searched results
 
         # If caching was disabled or no cache_manager, perform search directly
