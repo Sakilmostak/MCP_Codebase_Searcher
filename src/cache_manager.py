@@ -30,10 +30,35 @@ class CacheManager:
 
     def _generate_key(self, components_tuple):
         # Ensure consistent serialization for hashing
+        processed_components = []
+        for component in components_tuple:
+            if isinstance(component, list) and component: # Check if it's a non-empty list
+                # Heuristically check if it looks like a list of (path, timestamp) tuples
+                is_file_data_list = True
+                for item in component:
+                    if not (isinstance(item, tuple) and len(item) == 2):
+                        is_file_data_list = False
+                        break
+                
+                if is_file_data_list:
+                    # Convert list of (path, timestamp) tuples to a dict for stable serialization
+                    # Paths should be unique, so direct dict conversion is fine.
+                    try:
+                        file_timestamps_dict = {path: ts for path, ts in component}
+                        processed_components.append(file_timestamps_dict)
+                    except (TypeError, ValueError) as e:
+                        # Should not happen if is_file_data_list check is robust
+                        print(f"Warning: Error converting file data component to dict: {e}. Using original list.", file=sys.stderr)
+                        processed_components.append(component) # Fallback to original component
+                else:
+                    processed_components.append(component) # Not a file_data_list, keep as is
+            else:
+                processed_components.append(component) # Not a list, keep as is
+
         try:
             # Using json.dumps with sort_keys=True for dictionaries within the tuple
             # and handling common types.
-            serialized_components = json.dumps(components_tuple, sort_keys=True, default=str)
+            serialized_components = json.dumps(tuple(processed_components), sort_keys=True, default=str)
         except TypeError as e:
             # Fallback for complex/unserializable types, though inputs should be simple.
             # This is a basic fallback; robust serialization might need more handling.
