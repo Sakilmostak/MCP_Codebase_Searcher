@@ -49,7 +49,8 @@ py-modules = [
     "mcp_elaborate",
     "mcp_search",
     "output_generator",
-    "report_elaborator"
+    "report_elaborator",
+    "cache_manager"
 ]
 # Using py-modules explicitly, so find is not strictly needed but can be kept for safety/explicitness
 [tool.setuptools.packages.find]

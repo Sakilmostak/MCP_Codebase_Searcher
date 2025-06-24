@@ -16,7 +16,7 @@ try:
     from output_generator import OutputGenerator
     from report_elaborator import elaborate_finding
     from mcp_elaborate import ContextAnalyzer
-    from src.cache_manager import CacheManager # Added CacheManager import
+    from cache_manager import CacheManager # Changed import
     ELABORATE_AVAILABLE = True
 except ImportError as e:
     print(f"Critical Error: Failed to import necessary modules. This typically means the package is not installed correctly or there's an issue with PYTHONPATH. Please ensure 'mcp-codebase-searcher' is installed. Error: {e}", file=sys.stderr)
