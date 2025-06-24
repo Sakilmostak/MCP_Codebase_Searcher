@@ -122,6 +122,18 @@ def parse_arguments():
     elaborate_parser.add_argument('--api-key', type=str, default=None, help="Optional Google API key. If not provided, it will be sourced from --config-file, config.py, or environment.")
     elaborate_parser.add_argument('--config-file', type=str, default=None, help="Optional path to a JSON configuration file containing GOOGLE_API_KEY.")
     elaborate_parser.add_argument('--context-lines', type=int, default=10, help="Number of lines of broader context from the source file to provide to the LLM (default: 10).")
+    elaborate_parser.add_argument(
+        "--output-format",
+        choices=['console', 'json', 'md', 'markdown'],
+        default='console',
+        help="Format for the elaboration output (default: console)."
+    )
+    elaborate_parser.add_argument(
+        "--output-file",
+        type=str,
+        metavar="FILE",
+        help="Path to save the elaboration output. If not provided, prints to console."
+    )
 
     args = parser.parse_args()
     return args
@@ -254,8 +266,13 @@ def main():
                 sys.exit(1)
 
         elif args.command == 'elaborate':
+            if not ELABORATE_AVAILABLE:
+                print("Elaborate command is unavailable due to missing dependencies (e.g., google.generativeai).", file=sys.stderr)
+                sys.exit(1)
+
+            # --- API key sourcing logic (Restored and maintained) ---
             api_key_to_use = args.api_key
-            source_of_key = "args.api_key" if api_key_to_use else None
+            source_of_key = "command line --api-key argument" if api_key_to_use else None
 
             if not api_key_to_use and args.config_file:
                 try:
@@ -264,70 +281,105 @@ def main():
                         api_key_from_config_file = config_data.get('GOOGLE_API_KEY')
                         if api_key_from_config_file:
                             api_key_to_use = api_key_from_config_file
-                            source_of_key = f"config file ({args.config_file})"
+                            source_of_key = f"config file ('{args.config_file}')"
                 except FileNotFoundError:
-                    print(f"Warning: Config file '{args.config_file}' not found.", file=sys.stderr)
+                    logging.warning(f"Config file '{args.config_file}' not found.")
                 except json.JSONDecodeError:
-                    print(f"Warning: Could not decode JSON from config file '{args.config_file}'.", file=sys.stderr)
+                    logging.warning(f"Could not decode JSON from config file '{args.config_file}'.")
                 except Exception as e_cfg_load:
-                    print(f"Warning: Error reading config file '{args.config_file}': {e_cfg_load}.", file=sys.stderr)
-
+                    logging.warning(f"Error reading config file '{args.config_file}': {e_cfg_load}.")
+            
             if not api_key_to_use:
-                # Temporarily load .env to check for GOOGLE_API_KEY specifically for this step
-                # We use a distinct load_dotenv call here to isolate its effect for logging.
-                # The key, if found, is immediately retrieved from os.environ.
-                # Subsequent calls to os.getenv() by other modules will see this if it was loaded.
-                # ContextAnalyzer's own config.load_api_key() also calls load_dotenv.
-                original_env_key_value = os.getenv('GOOGLE_API_KEY') # Store pre-load_dotenv value if any
-                dotenv_loaded = load_dotenv(dotenv_path=os.path.join(os.getcwd(), '.env'), override=True)
+                # Load .env from current working directory to check for GOOGLE_API_KEY
+                # This explicitly loads .env here, overriding any system env var if key is present in .env
+                # ContextAnalyzer's internal config loading might also call load_dotenv,
+                # but this ensures CLI-level .env takes precedence if no direct arg or config file key.
+                original_env_key_value = os.getenv('GOOGLE_API_KEY') # For logging/comparison if needed
+                dotenv_path = os.path.join(os.getcwd(), '.env')
+                dotenv_loaded = load_dotenv(dotenv_path=dotenv_path, override=True) # Override existing env vars
                 
                 key_from_dotenv_cwd = os.getenv('GOOGLE_API_KEY')
 
-                if key_from_dotenv_cwd and (dotenv_loaded or key_from_dotenv_cwd != original_env_key_value):
-                    # Key was found and it's from the .env file (either newly loaded or .env overrode a previous value)
+                if key_from_dotenv_cwd: # If key is now in os.environ after load_dotenv
                     api_key_to_use = key_from_dotenv_cwd
-                    source_of_key = ".env file in CWD"
-                # If load_dotenv modified os.environ, we might want to restore the original state
-                # if this local .env check is meant to be strictly temporary and not affect later getenv calls
-                # For now, let it modify os.environ as this is typical dotenv behavior.
+                    if dotenv_loaded: # Indicates that the .env file was found and loaded
+                        source_of_key = f".env file in CWD ('{dotenv_path}')"
+                    elif original_env_key_value != key_from_dotenv_cwd: 
+                        # This case is less likely with override=True, but covers if os.environ changed
+                        source_of_key = ".env file affecting environment"
+                    elif not source_of_key: # Only if it wasn't already set by --api-key or --config-file
+                         source_of_key = "GOOGLE_API_KEY from environment (possibly set by .env)"
 
-            if not api_key_to_use:
-                env_api_key = os.getenv('GOOGLE_API_KEY') # This will pick up key from .env if loaded above, or global env
+
+            if not api_key_to_use: # Fallback to check environment if still not found
+                env_api_key = os.getenv('GOOGLE_API_KEY')
                 if env_api_key:
-                    # If source_of_key is already ".env file in CWD", we don't want to overwrite that.
-                    # This block is for when the key comes *only* from a pre-existing global env var.
-                    if source_of_key != ".env file in CWD": # Check if it wasn't already sourced from .env CWD
-                        api_key_to_use = env_api_key
+                    api_key_to_use = env_api_key
+                    # Avoid overwriting a more specific source like .env
+                    if not source_of_key or source_of_key == "command line --api-key argument" and not args.api_key:
                         source_of_key = "GOOGLE_API_KEY environment variable (system/shell)"
-                    # else: key already sourced from .env CWD, which took precedence
+
+            if source_of_key:
+                logging.info(f"Using Google API Key sourced from: {source_of_key}.")
+            elif not api_key_to_use: # Still no key
+                logging.warning("No Google API Key found from --api-key, --config-file, .env, or global environment variables. Elaboration may fail or use a default/mocked API.")
+            # --- End of API key sourcing logic ---
 
             try:
-                # The elaborate_finding function will be modified in Task 8 to accept and use
-                # cache_manager and args.no_cache
-                elaboration_result = elaborate_finding(
-                    report_path=args.report_file,
-                    finding_id=args.finding_id,
-                    api_key=api_key_to_use,
-                    context_window_lines=args.context_lines,
-                    cache_manager=cache_manager,
-                    no_cache=args.no_cache
-                )
-                if elaboration_result.startswith("Error:"):
-                    print(elaboration_result, file=sys.stderr)
-                    sys.exit(1)
-                else:
-                    print(elaboration_result)
-                    sys.exit(0)
-            except Exception as e:
-                print(f"An unexpected error occurred during elaboration: {type(e).__name__} - {e}", file=sys.stderr)
+                finding_id_int = int(args.finding_id)
+            except ValueError:
+                print(f"Error: Finding ID '{args.finding_id}' must be an integer index.", file=sys.stderr)
                 sys.exit(1)
+            
+            elaboration_text = elaborate_finding(
+                report_path=args.report_file,
+                finding_id=finding_id_int,
+                api_key=api_key_to_use, # Use the correctly sourced API key
+                context_window_lines=args.context_lines,
+                cache_manager=cache_manager,
+                no_cache=args.no_cache
+            )
+
+            if elaboration_text.startswith("Error:"):
+                print(elaboration_text, file=sys.stderr)
+                sys.exit(1)
+
+            # --- New output handling logic ---
+            output_to_write = ""
+            # Treat 'markdown' as 'md' for format checking
+            effective_output_format = 'md' if args.output_format == 'markdown' else args.output_format
+            is_json_output = effective_output_format == 'json'
+
+            if is_json_output:
+                output_to_write = json.dumps({"elaboration": elaboration_text}, indent=4)
+            else: # md or console
+                output_to_write = elaboration_text
+
+            if args.output_file:
+                try:
+                    with open(args.output_file, 'w', encoding='utf-8') as f:
+                        f.write(output_to_write)
+                    print(f"Elaboration successfully saved to {args.output_file}")
+                    if is_json_output:
+                         print(f"(The file contains the elaboration in JSON format.)")
+                except IOError as e:
+                    print(f"Error: Could not write to output file '{args.output_file}': {e}", file=sys.stderr)
+                    if effective_output_format != 'console': 
+                         print("\n--- Outputting to Console as Fallback ---")
+                    print(output_to_write) 
+                    sys.exit(1)
+            else: 
+                print(output_to_write)
+            
+            sys.exit(0) # Success for elaborate command
 
         else: # Should not be reached due to argparse 'required=True' for subparsers
             print(f"Error: Unknown command '{args.command}'", file=sys.stderr)
             sys.exit(1)
 
     except Exception as e:
-        print(f"An unexpected error occurred in main: {type(e).__name__} - {e}", file=sys.stderr)
+        logging.error(f"An unexpected error occurred: {e}", exc_info=True)
+        print(f"An unexpected error occurred: {e}", file=sys.stderr)
         sys.exit(1)
     finally:
         if cache_manager:
