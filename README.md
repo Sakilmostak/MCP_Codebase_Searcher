@@ -26,59 +26,7 @@ pip install mcp-codebase-searcher
 ```
 This will download and install the latest stable version and its dependencies. Ensure your pip is up to date (`pip install --upgrade pip`).
 
-**2. API Key (for Elaboration):**
-
-To use the elaboration feature, you need a Google API key for Gemini. You can provide it via:
-*   The `--api-key` argument when using the `elaborate` command.
-*   A JSON configuration file specified with `--config-file` (containing `{\\"GOOGLE_API_KEY\\": \\"YOUR_KEY\\"}`).
-*   An environment variable `GOOGLE_API_KEY`.
-
-The API key is sourced with the following precedence: `--api-key` argument > `--config-file` > `GOOGLE_API_KEY` environment variable.
-
-If using environment variables, you might set it in your shell profile or create a `.env` file in your project directory *when you are using the tool* (not for installation of the tool itself):
-```
-GOOGLE_API_KEY="YOUR_API_KEY_HERE"
-```
-The tool uses `python-dotenv` to load this if available in the working directory.
-
-## Caching
-
-`mcp-codebase-searcher` implements a caching mechanism to improve performance for repeated search and elaboration operations. This feature is particularly useful when working on the same codebase or re-visiting previous findings.
-
-The cache stores results of search queries and elaboration outputs. When a similar operation is performed, the tool can retrieve the result from the cache instead of re-processing, saving time and, in the case of elaboration, API calls.
-
-This functionality is powered by the `diskcache` library.
-
-**Default Cache Location:**
-By default, cache files are stored in `~/.cache/mcp_codebase_searcher` (i.e., in a directory named `mcp_codebase_searcher` within your user's standard cache directory).
-
-**Caching CLI Arguments:**
-
-The following command-line arguments allow you to control the caching behavior:
-
-*   `--no-cache`:
-    *   Disables caching entirely for the current run. Neither reading from nor writing to the cache will occur.
-
-*   `--clear-cache`:
-    *   Clears all data from the cache directory before the current operation proceeds. This is useful if you suspect the cache is stale or want to free up disk space.
-
-*   `--cache-dir DIRECTORY`:
-    *   Specifies a custom directory to store cache files. If the directory does not exist, the tool will attempt to create it.
-    *   Example: `--cache-dir /tmp/my_search_cache`
-
-*   `--cache-expiry DAYS`:
-    *   Sets the default expiry time for new cache entries in days. Cached items older than this will be considered stale and re-fetched on the next request.
-    *   Default: `7` days.
-    *   Example: `--cache-expiry 3` (sets expiry to 3 days)
-
-*   `--cache-size-limit MB`:
-    *   Sets an approximate size limit for the cache directory in Megabytes (MB). When the cache approaches this limit, older or less frequently used items may be evicted to make space.
-    *   Default: `100` MB.
-    *   Example: `--cache-size-limit 250` (sets limit to 250 MB)
-
-These caching options provide flexibility in managing how search and elaboration results are stored and reused, allowing you to balance performance benefits with disk space usage and data freshness.
-
-**3. Development / Manual Installation (from source):**
+**2. Development / Manual Installation (from source):**
 
 If you want to develop the tool or install it manually from the source code:
 
@@ -103,6 +51,60 @@ If you want to develop the tool or install it manually from the source code:
     ```bash
     pip install dist/mcp_codebase_searcher-*.whl
     ```
+
+## Configuration
+
+### API Key for Elaboration
+
+To use the elaboration feature, you need a Google API key for Gemini. You can provide it via:
+*   The **`--api-key`** argument when using the `elaborate` command.
+*   A JSON configuration file specified with **`--config-file`** (containing `{"GOOGLE_API_KEY": "YOUR_KEY"}`).
+*   An environment variable **`GOOGLE_API_KEY`**.
+
+The API key is sourced with the following precedence: **`--api-key`** argument > **`--config-file`** > **`GOOGLE_API_KEY`** environment variable.
+
+If using environment variables, you might set it in your shell profile or create a `.env` file in your project directory *when you are using the tool* (not for installation of the tool itself):
+```env
+GOOGLE_API_KEY="YOUR_API_KEY_HERE"
+```
+The tool uses `python-dotenv` to load this if available in the working directory.
+
+## Caching
+
+`mcp-codebase-searcher` implements a caching mechanism to improve performance for repeated search and elaboration operations. This feature is particularly useful when working on the same codebase or re-visiting previous findings.
+
+The cache stores results of search queries and elaboration outputs. When a similar operation is performed, the tool can retrieve the result from the cache instead of re-processing, saving time and, in the case of elaboration, API calls.
+
+This functionality is powered by the `diskcache` library.
+
+**Default Cache Location:**
+By default, cache files are stored in `~/.cache/mcp_codebase_searcher` (i.e., in a directory named `mcp_codebase_searcher` within your user's standard cache directory).
+
+**Caching CLI Arguments:**
+
+The following command-line arguments allow you to control the caching behavior:
+
+*   **`--no-cache`**:
+    *   Disables caching entirely for the current run. Neither reading from nor writing to the cache will occur.
+
+*   **`--clear-cache`**:
+    *   Clears all data from the cache directory before the current operation proceeds. This is useful if you suspect the cache is stale or want to free up disk space.
+
+*   **`--cache-dir`** `DIRECTORY`:
+    *   Specifies a custom directory to store cache files. If the directory does not exist, the tool will attempt to create it.
+    *   Example: `--cache-dir /tmp/my_search_cache`
+
+*   **`--cache-expiry`** `DAYS`:
+    *   Sets the default expiry time for new cache entries in days. Cached items older than this will be considered stale and re-fetched on the next request.
+    *   Default: `7` days.
+    *   Example: `--cache-expiry 3` (sets expiry to 3 days)
+
+*   **`--cache-size-limit`** `MB`:
+    *   Sets an approximate size limit for the cache directory in Megabytes (MB). When the cache approaches this limit, older or less frequently used items may be evicted to make space.
+    *   Default: `100` MB.
+    *   Example: `--cache-size-limit 250` (sets limit to 250 MB)
+
+These caching options provide flexibility in managing how search and elaboration results are stored and reused, allowing you to balance performance benefits with disk space usage and data freshness.
 
 ## Project Structure
 
@@ -135,14 +137,14 @@ mcp-searcher search "your_query" path/to/search [--regex] [--case-sensitive] [--
 
 *   `query`: The search term or regex pattern.
 *   `paths`: One or more file or directory paths to search within.
-*   `--regex`, `-r`: Treat the `query` as a Python regular expression pattern.
-*   `--case-sensitive`, `-c`: Perform a case-sensitive search. By default, search is case-insensitive.
-*   `--context LINES`, `-C LINES`: Number of context lines to show around each match (default: 3). Set to 0 for no context.
-*   `--exclude-dirs PATTERNS`: Comma-separated list of directory name patterns (using `fnmatch` wildcards like `*`, `?`) to exclude (e.g., `.git,node_modules,build,*cache*`).
-*   `--exclude-files PATTERNS`: Comma-separated list of file name patterns (using `fnmatch` wildcards) to exclude (e.g., `*.log,*.tmp,temp_*`).
-*   `--include-hidden`: Include hidden files and directories (those starting with a period `.`) in the scan. By default, they are excluded unless they are explicitly provided in `paths`.
-*   `--output-format FORMAT`: Format for the output. Choices: `console` (default), `json`, `md` (or `markdown`).
-*   `--output-file FILE`: Path to save the output. If not provided, prints to the console.
+*   **`--regex`**, **`-r`**: Treat the `query` as a Python regular expression pattern.
+*   **`--case-sensitive`**, **`-c`**: Perform a case-sensitive search. By default, search is case-insensitive.
+*   **`--context`** `LINES`, **`-C`** `LINES`: Number of context lines to show around each match (default: 3). Set to 0 for no context.
+*   **`--exclude-dirs`** `PATTERNS`: Comma-separated list of directory name patterns (using `fnmatch` wildcards like `*`, `?`) to exclude (e.g., `.git,node_modules,build,*cache*`).
+*   **`--exclude-files`** `PATTERNS`: Comma-separated list of file name patterns (using `fnmatch` wildcards) to exclude (e.g., `*.log,*.tmp,temp_*`).
+*   **`--include-hidden`**: Include hidden files and directories (those starting with a period `.`) in the scan. By default, they are excluded unless they are explicitly provided in `paths`.
+*   **`--output-format`** `FORMAT`: Format for the output. Choices: `console` (default), `json`, `md` (or `markdown`).
+*   **`--output-file`** `FILE`: Path to save the output. If not provided, prints to the console.
 
 **Examples:**
 
@@ -151,16 +153,11 @@ mcp-searcher search "your_query" path/to/search [--regex] [--case-sensitive] [--
     mcp-searcher search "TODO" src --exclude-dirs __pycache__ --exclude-files "*.tmp,*.log" --output-format json --output-file todos.json
     ```
 
-2.  Search for Python function definitions (e.g., `def my_function(`) using a regular expression in all `.py` files within the current directory (`.`) and its subdirectories:
+2.  Search for Python function definitions (e.g., `def my_function():`) using a regular expression within the current directory (`.`):
     ```bash
-    mcp-searcher search "^\\s*def\\s+\\w+\\s*\\(.*\\):" . --regex --exclude-files "!*.py" # Assumes FileScanner handles includes or user pre-filters paths if !*.py is not directly supported for exclusion.
-    # A better way if FileScanner doesn't support include patterns in exclude-files:
-    # Find .py files first, then pass to mcp-searcher, or rely on mcp-searcher scanning all and then filtering if it did.
-    # For this tool, it scans all non-excluded, so to search only .py, you'd typically not exclude others unless they are binaries etc.
-    # Corrected Example for just regex:
-    mcp-searcher search "^\\s*def\\s+\\w+\\s*\\(.*\\):" . --regex
+    mcp-searcher search "^\s*def\s+\w+\s*\(.*\):" . --regex
     ```
-    *Note: Ensure your regex is quoted correctly for your shell, especially if it contains special characters.*
+    *Note: Ensure your regex is quoted correctly for your shell, especially if it contains special characters. To search only within specific file types (e.g., only `.py` files), you can either provide paths directly to those files/directories containing mostly those files, or use shell commands to pipe a list of files to `mcp-searcher` if it supports reading file lists from stdin (currently, it expects paths as arguments).*
 
 3.  Perform a case-sensitive search for the exact string "ErrorLog" in all files in `/var/log`, include hidden files, and output to a Markdown file:
     ```bash
@@ -170,20 +167,22 @@ mcp-searcher search "your_query" path/to/search [--regex] [--case-sensitive] [--
 ### Elaborate
 
 ```bash
-mcp-searcher elaborate --report-file path/to/report.json --finding-id INDEX [--api-key YOUR_KEY] [--config-file path/to/config.json] [--context-lines LINES]
+mcp-searcher elaborate --report-file path/to/report.json --finding-id INDEX [--api-key YOUR_KEY] [--config-file path/to/config.json] [--context-lines LINES] [--output-format FORMAT] [--output-file FILE]
 ```
 
 **Arguments:**
 
-*   `--report-file FILE`: (Required) Path to the JSON search report file generated by the `search` command.
-*   `--finding-id INDEX`: (Required) The 0-based index (ID) of the specific finding within the report file that you want to elaborate on.
-*   `--api-key KEY`: Your Google API key for Gemini. If provided, this takes precedence over other key sources.
-*   `--config-file FILE`: Path to an optional JSON configuration file containing your `GOOGLE_API_KEY` (e.g., `{"GOOGLE_API_KEY": "YOUR_KEY"}`).
-*   `--context-lines LINES`: Number of lines of broader context from the source file (surrounding the original snippet) to provide to the LLM for better understanding (default: 10).
+*   **`--report-file`** `FILE`: (Required) Path to the JSON search report file generated by the `search` command.
+*   **`--finding-id`** `INDEX`: (Required) The 0-based index (ID) of the specific finding within the report file that you want to elaborate on.
+*   **`--api-key`** `KEY`: Your Google API key for Gemini. If provided, this takes precedence over other key sources.
+*   **`--config-file`** `FILE`: Path to an optional JSON configuration file containing your **`GOOGLE_API_KEY`** (e.g., `{"GOOGLE_API_KEY": "YOUR_KEY"}`).
+*   **`--context-lines`** `LINES`: Number of lines of broader context from the source file (surrounding the original snippet) to provide to the LLM for better understanding (default: 10).
+*   **`--output-format`** `FORMAT`: Format for the elaboration output. Choices: `console` (default), `json`, `md` (or `markdown`).
+*   **`--output-file`** `FILE`: Path to save the elaboration output. If not provided, prints to the console. If an error occurs during elaboration, the error message itself will be printed/saved.
 
 **Examples:**
 
-1.  Elaborate on the first finding (index 0) from `todos.json`, assuming the API key is set as an environment variable (`GOOGLE_API_KEY`) or in a `config.py` / `.env` file:
+1.  Elaborate on the first finding (index 0) from `todos.json`, assuming the API key is set as an environment variable (`GOOGLE_API_KEY`) or in a `config.py` / `.env` file (output to console):
     ```bash
     mcp-searcher elaborate --report-file todos.json --finding-id 0
     ```
@@ -196,6 +195,11 @@ mcp-searcher elaborate --report-file path/to/report.json --finding-id INDEX [--a
 3.  Elaborate on a finding from `project_report.json`, using an API key stored in a custom configuration file named `my_gemini_config.json` located in the user\'s home directory:
     ```bash
     mcp-searcher elaborate --report-file project_report.json --finding-id 5 --config-file ~/.my_gemini_config.json
+    ```
+
+4.  Elaborate on the first finding from `todos.json` and save the output as a JSON file named `elaboration_0.json`:
+    ```bash
+    mcp-searcher elaborate --report-file todos.json --finding-id 0 --output-format json --output-file elaboration_0.json
     ```
 
 ## Output Formats
@@ -228,12 +232,12 @@ The `search` command can output results in several formats using the `--output-f
     ```json
     [
       {
-        \"file_path\": \"/path/to/your/file.py\",
-        \"line_number\": 42,
-        \"match_text\": \"matched text\",
-        \"snippet\": \"  Context line 1 before match\\n  >>>The line with the matched text<<<\\n  Context line 1 after match\",
-        \"char_start_in_line\": 25, 
-        \"char_end_in_line\": 37
+        "file_path": "/path/to/your/file.py",
+        "line_number": 42,
+        "match_text": "matched text",
+        "snippet": "  Context line 1 before match\n  >>>The line with the matched text<<<\n  Context line 1 after match",
+        "char_start_in_line": 25,
+        "char_end_in_line": 37
       }
       // ... more matches ...
     ]
@@ -244,14 +248,18 @@ The `search` command can output results in several formats using the `--output-f
 
     *Example Markdown Output (simplified):*
     ```markdown
-    **path/to/your/file.py:42**
+    ### Match in `path/to/your/file.py` (Line 42)
+
     ```text
       Context line 1 before match
       >>>The line with the matched text<<<
       Context line 1 after match
     ```
+
     ---
-    **another/file.txt:101**
+
+    ### Match in `another/file.txt` (Line 101)
+
     ```text
       Just the >>>matched line<<< if no context
     ```
