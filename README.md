@@ -1,4 +1,4 @@
-# MCP Codebase Searcher 🚀
+# MCP Codebase Searcher
 
 **An ultra-fast, context-optimized Model Context Protocol (MCP) Server for LLM code navigation.**
 
@@ -10,7 +10,7 @@ When an AI attempts to read an entire codebase (Brute-force RAG), it wastes mass
 
 By injecting this MCP Server into your AI's toolkit, the LLM intelligently calls our native search tool to find exactly what it needs, and then pipes that snippet into our LiteLLM-powered `elaborate_finding` sub-agent to summarize local file logic.
 
-**⚡ Benchmark Simulation (15-File Repo):**
+**Benchmark Simulation (15-File Repo):**
 *   **Prompt Compute Reduction:** **-85.21%** (4,436 tokens → 656 tokens)
 *   **Inference Latency:** **-41.13% Faster** (24.5s → 14.4s)
 *   **Scalability:** O(1) context scaling. Safe for 100k+ line mono-repos where standard context dumps fail.

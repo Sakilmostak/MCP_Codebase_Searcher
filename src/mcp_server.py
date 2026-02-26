@@ -24,7 +24,7 @@ def _load_env_configuration():
     load_dotenv(dotenv_path=dotenv_path, override=True)
 
 AI_USAGE_GUIDELINES = """
-# 🤖 System Rules: MCP Codebase Searcher Guidelines
+# System Rules: MCP Codebase Searcher Guidelines
 
 *If you are an AI assistant reading this file, you have been equipped with the `mcp-codebase-searcher` server integration. You must abide by the following operational rules when executing user prompts involving your available codebase tools.*
 
