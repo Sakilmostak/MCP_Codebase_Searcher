@@ -7,7 +7,7 @@ import logging # Added import
 # Direct import, as mcp_elaborate.py is installed as a top-level module
 from mcp_elaborate import ContextAnalyzer
 
-def elaborate_finding(report_path, finding_id, api_key=None, context_window_lines=10, cache_manager=None, no_cache=False):
+def elaborate_finding(report_path, finding_id, api_key=None, model_name='gemini/gemini-1.5-flash-latest', api_base=None, context_window_lines=10, cache_manager=None, no_cache=False):
     """
     Loads a JSON search report, locates a specific finding by its index (finding_id),
     reads the source file for broader context, and uses ContextAnalyzer to elaborate.
@@ -16,7 +16,9 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
     Args:
         report_path (str): Path to the JSON search report file.
         finding_id (int or str): The 0-based index of the finding or a string to be converted to int.
-        api_key (str, optional): Google API key for ContextAnalyzer. Defaults to None (analyzer will try other methods).
+        api_key (str, optional): Option API key. Defaults to None.
+        model_name (str, optional): The LiteLLM model string to use.
+        api_base (str, optional): Custom endpoint URL.
         context_window_lines (int, optional): Number of lines for broader context. Defaults to 10.
         cache_manager (CacheManager, optional): Instance of CacheManager for caching. Defaults to None.
         no_cache (bool, optional): If True, disables caching for this call. Defaults to False.
@@ -58,10 +60,8 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
             finding_json_str = json.dumps(found_finding, sort_keys=True)
             finding_hash = hashlib.sha256(finding_json_str.encode('utf-8')).hexdigest()
             
-            # Use api_key in the cache key as it influences the ContextAnalyzer's behavior/model.
-            # While ContextAnalyzer might use a specific model_name, the api_key is what's directly passed
-            # and could point to different configurations or access levels.
-            cache_key_components = ('elaborate', finding_hash, context_window_lines, api_key)
+            # Use api_key and model settings in the cache key as they influence behavior.
+            cache_key_components = ('elaborate', finding_hash, context_window_lines, api_key, model_name, api_base)
             
             logging.info(f"Checking cache for elaborate finding ID {finding_index} (Operation: '{cache_key_components[0]}')")
             cached_elaboration = cache_manager.get(cache_key_components) # CacheManager.get now handles hit/miss logging
@@ -86,7 +86,7 @@ def elaborate_finding(report_path, finding_id, api_key=None, context_window_line
         logging.warning(f"Could not read source file '{source_file_path}': {e}. Proceeding with snippet only.")
 
     try:
-        analyzer = ContextAnalyzer(api_key=api_key)
+        analyzer = ContextAnalyzer(api_key=api_key, model_name=model_name, api_base=api_base)
         try:
             if not analyzer.model:
                 return "Error: ContextAnalyzer model could not be initialized. Cannot elaborate."

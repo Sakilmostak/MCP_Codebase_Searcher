@@ -119,8 +119,10 @@ def parse_arguments():
     elaborate_parser = subparsers.add_parser('elaborate', help='Elaborate on a specific finding from a JSON report.')
     elaborate_parser.add_argument('--report-file', required=True, help="Path to the JSON search report file.")
     elaborate_parser.add_argument('--finding-id', required=True, type=str, help="The 0-based index (ID) of the finding in the report to elaborate on.")
-    elaborate_parser.add_argument('--api-key', type=str, default=None, help="Optional Google API key. If not provided, it will be sourced from --config-file, config.py, or environment.")
-    elaborate_parser.add_argument('--config-file', type=str, default=None, help="Optional path to a JSON configuration file containing GOOGLE_API_KEY.")
+    elaborate_parser.add_argument('--api-key', type=str, default=None, help="Optional API key (e.g. for OpenAI). If not provided, it will be sourced from --config-file, config.py, or environment (e.g. OPENAI_API_KEY).")
+    elaborate_parser.add_argument('--config-file', type=str, default=None, help="Optional path to a JSON configuration file containing API keys.")
+    elaborate_parser.add_argument('--model-name', type=str, default='gemini/gemini-1.5-flash-latest', help="The name of the Litellm model to use (default: gemini/gemini-1.5-flash-latest).")
+    elaborate_parser.add_argument('--api-base', type=str, default=None, help="Optional custom API base URL (e.g. for local Ollama endpoints).")
     elaborate_parser.add_argument('--context-lines', type=int, default=10, help="Number of lines of broader context from the source file to provide to the LLM (default: 10).")
     elaborate_parser.add_argument(
         "--output-format",
@@ -274,14 +276,29 @@ def main():
             api_key_to_use = args.api_key
             source_of_key = "command line --api-key argument" if api_key_to_use else None
 
-            if not api_key_to_use and args.config_file:
+            model_name_to_use = args.model_name
+            api_base_to_use = args.api_base
+
+            if args.config_file:
                 try:
                     with open(args.config_file, 'r', encoding='utf-8') as f_cfg:
                         config_data = json.load(f_cfg)
-                        api_key_from_config_file = config_data.get('GOOGLE_API_KEY')
-                        if api_key_from_config_file:
-                            api_key_to_use = api_key_from_config_file
-                            source_of_key = f"config file ('{args.config_file}')"
+                        
+                        if not api_key_to_use:
+                            api_key_from_config_file = config_data.get('api_key') or config_data.get('API_KEY') or config_data.get('GOOGLE_API_KEY') or config_data.get('OPENAI_API_KEY')
+                            if api_key_from_config_file:
+                                api_key_to_use = api_key_from_config_file
+                                source_of_key = f"config file ('{args.config_file}')"
+
+                        if args.model_name == 'gemini/gemini-1.5-flash-latest':
+                            config_model = config_data.get('model_name') or config_data.get('MODEL_NAME')
+                            if config_model:
+                                model_name_to_use = config_model
+                        
+                        if not api_base_to_use:
+                            config_api_base = config_data.get('api_base') or config_data.get('API_BASE')
+                            if config_api_base:
+                                api_base_to_use = config_api_base
                 except FileNotFoundError:
                     logging.warning(f"Config file '{args.config_file}' not found.")
                 except json.JSONDecodeError:
@@ -298,7 +315,17 @@ def main():
                 dotenv_path = os.path.join(os.getcwd(), '.env')
                 dotenv_loaded = load_dotenv(dotenv_path=dotenv_path, override=True) # Override existing env vars
                 
-                key_from_dotenv_cwd = os.getenv('GOOGLE_API_KEY')
+                key_from_dotenv_cwd = os.getenv('GOOGLE_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('API_KEY')
+                
+                if args.model_name == 'gemini/gemini-1.5-flash-latest':
+                    env_model = os.getenv('LITELLM_MODEL_NAME') or os.getenv('MODEL_NAME')
+                    if env_model:
+                        model_name_to_use = env_model
+                        
+                if not api_base_to_use:
+                    env_api_base = os.getenv('LITELLM_API_BASE') or os.getenv('API_BASE')
+                    if env_api_base:
+                        api_base_to_use = env_api_base
 
                 if key_from_dotenv_cwd: # If key is now in os.environ after load_dotenv
                     api_key_to_use = key_from_dotenv_cwd
@@ -312,7 +339,7 @@ def main():
 
 
             if not api_key_to_use: # Fallback to check environment if still not found
-                env_api_key = os.getenv('GOOGLE_API_KEY')
+                env_api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('API_KEY')
                 if env_api_key:
                     api_key_to_use = env_api_key
                     # Avoid overwriting a more specific source like .env
@@ -335,6 +362,8 @@ def main():
                 report_path=args.report_file,
                 finding_id=finding_id_int,
                 api_key=api_key_to_use, # Use the correctly sourced API key
+                model_name=model_name_to_use,
+                api_base=api_base_to_use,
                 context_window_lines=args.context_lines,
                 cache_manager=cache_manager,
                 no_cache=args.no_cache

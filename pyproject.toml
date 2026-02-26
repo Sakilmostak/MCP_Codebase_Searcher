@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp_codebase_searcher"
-version = "0.1.5"
+version = "0.1.6"
 authors = [
   { name="Sakilmostak", email="skmahim71@gmail.com" },
 ]
-description = "A Python tool to scan codebases, search for text/regex patterns, and elaborate on findings using Google Gemini."
+description = "A Python tool to scan codebases, search for text/regex patterns, and elaborate on findings using AI models via LiteLLM."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
@@ -26,8 +26,8 @@ classifiers = [
 # Dependencies will be added in the next step
 dependencies = [
     "python-dotenv",
-    "google-generativeai",
-    "diskcache",
+    "litellm",
+    "mcp[cli]",
 ]
 
 # py-modules IS REMOVED FROM HERE
@@ -35,6 +35,7 @@ dependencies = [
 [project.scripts]
 # Entry points will be defined in a later subtask
 mcp-searcher = "mcp_searcher:main"
+mcp-searcher-server = "mcp_server:main"
 
 [project.urls]
 "Homepage" = "https://github.com/sakilmostak/mcp-codebase-searcher" # Placeholder
@@ -50,7 +51,8 @@ py-modules = [
     "mcp_search",
     "output_generator",
     "report_elaborator",
-    "cache_manager"
+    "cache_manager",
+    "mcp_server"
 ]
 # Using py-modules explicitly, so find is not strictly needed but can be kept for safety/explicitness
 [tool.setuptools.packages.find]

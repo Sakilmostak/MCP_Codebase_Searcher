@@ -1,11 +1,9 @@
 # Module for mcp_elaborate command logic
 
-import google.generativeai as genai
+import litellm
+from litellm.exceptions import ContextWindowExceededError # Example explicit import, LiteLLM has many
 import os
 import sys
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
-from google.generativeai.types import BlockedPromptException # Explicit import for clarity
-import google.api_core.exceptions # For more specific API error handling
 
 # Direct import, as config.py is installed as a top-level module
 try:
@@ -19,44 +17,23 @@ class ContextAnalyzer:
     """
     Uses a Generative AI model to elaborate on code snippets and provide context.
     """
-    def __init__(self, api_key=None, model_name='gemini-1.5-flash-latest'):
+    def __init__(self, api_key=None, model_name='gemini/gemini-1.5-flash-latest', api_base=None):
         """
         Initializes the ContextAnalyzer.
 
         Args:
-            api_key (str, optional): The Google API key. If None, attempts to load from config.
-            model_name (str, optional): The name of the Gemini model to use. Defaults to 'gemini-1.5-flash-latest'.
+            api_key (str, optional): The API key (if needed by the provider). If None, relies on environment variables.
+            model_name (str, optional): The name of the model to use (LiteLLM format, e.g. 'gpt-4o', 'ollama/llama3'). Defaults to 'gemini/gemini-1.5-flash-latest'.
+            api_base (str, optional): A custom API base URL (e.g., for local models or proxy endpoints).
         """
         self.model_name = model_name
         self.api_key = api_key  # Prioritize direct parameter
-        self.generation_config = genai.types.GenerationConfig(
-            # temperature=0.7, # Example: Adjust creativity
-            # top_p=0.9,       # Example: Adjust token sampling
-            # top_k=40,        # Example: Adjust token sampling
-            # max_output_tokens=1024 # Example: Limit response length
-        )
-        self.safety_settings = [
-            {
-                "category": "HARM_CATEGORY_HARASSMENT",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-                "category": "HARM_CATEGORY_HATE_SPEECH",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-                "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-            },
-            {
-                "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-                "threshold": "BLOCK_MEDIUM_AND_ABOVE"
-            }
-        ]
+        self.api_base = api_base
 
         if not self.api_key:
-            # Try environment variable next
-            self.api_key = os.getenv('GOOGLE_API_KEY')
+            # We assume LiteLLM can find the key in the environment (e.g. OPENAI_API_KEY, GEMINI_API_KEY, etc.)
+            # or the user is using a provider that doesn't need an explicit key (e.g. local Ollama, vertex_ai, bedrock).
+            self.api_key = os.getenv('GOOGLE_API_KEY') # Fallback if previously used
 
         if not self.api_key:
             # Try config file last
@@ -66,22 +43,15 @@ class ContextAnalyzer:
                 except Exception as e:
                     print(f"Warning: Could not load API key from config: {e}", file=sys.stderr)
 
-        if not self.api_key:
+        # LiteLLM handles initialization dynamically at call-time, so we don't need distinct model setup here.
+        # However, we can track if initialization "succeeded" by validating if model_name is set.
+        if not self.model_name:
             self.model = None
-            print("Error: ContextAnalyzer initialized without an API key. Elaboration will not function.", file=sys.stderr)
+            print("Error: ContextAnalyzer initialized without a model name. Elaboration will not function.", file=sys.stderr)
             return
 
-        try:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(
-                model_name=self.model_name,
-                generation_config=self.generation_config,
-                safety_settings=self.safety_settings
-            )
-            print(f"ContextAnalyzer initialized successfully with model: {self.model_name}")
-        except Exception as e:
-            self.model = None
-            print(f"Error initializing Google Generative AI model ({self.model_name}): {e}", file=sys.stderr)
+        self.model = True # Simple flag indicating readiness
+        print(f"ContextAnalyzer initialized successfully for model: {self.model_name}")
 
     def elaborate_on_match(self, file_path, line_number, snippet, full_file_content=None, context_window_lines=10):
         """
@@ -144,32 +114,31 @@ class ContextAnalyzer:
         )
 
         try:
-            response = self.model.generate_content(prompt)
-            
-            if response.prompt_feedback and response.prompt_feedback.block_reason:
-                reason = response.prompt_feedback.block_reason.name
-                print(f"Warning: Elaboration for {file_path}:{line_number} blocked by API. Reason: {reason}", file=sys.stderr)
-                return f"Error: Elaboration blocked by API. Reason: {reason}"
-            
-            if response.parts:
-                elaboration_text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
-                if not elaboration_text.strip():
-                    print(f"Warning: Received empty elaboration from API for {file_path}:{line_number}.", file=sys.stderr)
-                    return "Error: Elaboration from API was empty or unparsable"
+            # Prepare kwargs for the completion call
+            kwargs = {
+                "model": self.model_name,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if self.api_key:
+                kwargs["api_key"] = self.api_key
+            if self.api_base:
+                kwargs["api_base"] = self.api_base
+
+            response = litellm.completion(**kwargs)
+
+            # litellm standardizes the response to an OpenAI-like format
+            if response.choices and len(response.choices) > 0:
+                elaboration_text = response.choices[0].message.content
+                if not elaboration_text or not elaboration_text.strip():
+                     print(f"Warning: Received empty elaboration from API for {file_path}:{line_number}.", file=sys.stderr)
+                     return "Error: Elaboration from API was empty or unparsable"
                 return elaboration_text
             else:
-                print(f"Warning: No parts found in API response for {file_path}:{line_number}. Response: {response}", file=sys.stderr)
+                print(f"Warning: No choices found in API response for {file_path}:{line_number}. Response: {response}", file=sys.stderr)
                 return "Error: No content returned from API for elaboration"
 
-        except BlockedPromptException as e:
-            print(f"Warning: Elaboration for {file_path}:{line_number} was explicitly blocked. {e}", file=sys.stderr)
-            return f"Error: Elaboration blocked by API: {e}"
-        except google.api_core.exceptions.GoogleAPIError as e:
-            error_message = f"API error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
-            print(f"Warning: {error_message}", file=sys.stderr)
-            return f"Error: {error_message}"
         except Exception as e:
-            error_message = f"Unexpected error during elaboration for {file_path}:{line_number}: {type(e).__name__} - {e}"
+            error_message = f"API error during elaboration for {file_path}:{line_number} (litellm): {type(e).__name__} - {e}"
             print(f"Warning: {error_message}", file=sys.stderr)
             return f"Error: {error_message}"
 

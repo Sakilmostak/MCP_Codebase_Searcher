@@ -96,8 +96,10 @@ class TestMcpSearcher(unittest.TestCase):
         self.assertEqual(stderr, "")
         mock_elaborate_finding.assert_called_once_with(
             report_path=report_path,
-            finding_id='0',
-            api_key=None, 
+            finding_id=0,
+            api_key=None,
+            model_name='gemini/gemini-1.5-flash-latest',
+            api_base=None,
             context_window_lines=10, # Default
             cache_manager=unittest.mock.ANY,
             no_cache=unittest.mock.ANY
@@ -124,8 +126,10 @@ class TestMcpSearcher(unittest.TestCase):
         self.assertIn("Elaboration with params.", stdout)
         mock_elaborate_finding.assert_called_once_with(
             report_path=report_path,
-            finding_id='0',
-            api_key='test_key_123', 
+            finding_id=0,
+            api_key='test_key_123',
+            model_name='gemini/gemini-1.5-flash-latest',
+            api_base=None,
             context_window_lines=5,
             cache_manager=unittest.mock.ANY,
             no_cache=unittest.mock.ANY
@@ -159,8 +163,10 @@ class TestMcpSearcher(unittest.TestCase):
         # Ensure our direct mock was called
         mock_elaborate_finding_direct.assert_called_once_with(
             report_path='non_existent_report.json', 
-            finding_id='0', 
+            finding_id=0, 
             api_key=unittest.mock.ANY, # main will determine this, allow ANY
+            model_name=unittest.mock.ANY,
+            api_base=unittest.mock.ANY,
             context_window_lines=10,   # Default from argparse
             cache_manager=unittest.mock.ANY,
             no_cache=False # Default from argparse
@@ -207,8 +213,10 @@ class TestMcpSearcher(unittest.TestCase):
         mock_json_load.assert_called_once() 
         mock_elaborate_finding.assert_called_with(
             report_path=report_path, 
-            finding_id='0', 
+            finding_id=0, 
             api_key='key_from_config', 
+            model_name='gemini/gemini-1.5-flash-latest',
+            api_base=None,
             context_window_lines=10,
             cache_manager=unittest.mock.ANY,
             no_cache=unittest.mock.ANY
@@ -229,8 +237,10 @@ class TestMcpSearcher(unittest.TestCase):
         self.assertEqual(stderr_bad, "")
         mock_elaborate_finding.assert_called_with(
             report_path=report_path, 
-            finding_id='0', 
+            finding_id=0, 
             api_key=None, 
+            model_name='gemini/gemini-1.5-flash-latest',
+            api_base=None,
             context_window_lines=10,
             cache_manager=unittest.mock.ANY,
             no_cache=unittest.mock.ANY
@@ -249,19 +259,15 @@ class TestMcpSearcher(unittest.TestCase):
         _stdout_precedence, stderr_precedence, _exit_code_precedence, mock_open_prec = self.run_main_with_args(args_api_takes_precedence)
         mock_elaborate_finding.assert_called_with(
             report_path=report_path, 
-            finding_id='0', 
+            finding_id=0, 
             api_key='direct_api_key', 
+            model_name='gemini/gemini-1.5-flash-latest',
+            api_base=None,
             context_window_lines=10,
             cache_manager=unittest.mock.ANY,
             no_cache=unittest.mock.ANY
             )
-        mock_json_load.assert_not_called() # json.load (and thus open for config) should not be called
-        
-        # Check that open was not called for config_path_good specifically
-        # This is a bit tricky with a general mock_open.
-        # A more robust way is to ensure json.load wasn't called, which implies open wasn't used for config.
-        # For more fine-grained open mocking, one might use a side_effect function.
-        # For this test, json.load.assert_not_called() is the key check.
+        mock_json_load.assert_called_once() # json.load is still called to check for api_base/model_name
         self.assertEqual(stderr_precedence, "")
 
     def test_caching_cli_arguments_help_text(self):
