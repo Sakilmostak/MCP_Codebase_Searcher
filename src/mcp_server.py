@@ -47,20 +47,8 @@ def search_codebase(
         A JSON string containing the list of search findings (file_path, line_number, snippet, match_text).
     """
     try:
-        exclude_dirs_patterns = [
-            re.compile(r"^\.git$"), 
-            re.compile(r"^node_modules$"), 
-            re.compile(r"^venv$"), 
-            re.compile(r"^__pycache__$")
-        ]
-        exclude_files_patterns = [
-            re.compile(r".*\.pyc$"), 
-            re.compile(r".*\.log$")
-        ]
-        
-        # In MCP context, scanner receives exclusion patterns at __init__
+        # In MCP context, scanner uses default exclusions automatically
         scanner = FileScanner(
-            custom_exclude_patterns=exclude_dirs_patterns + exclude_files_patterns,
             exclude_dot_items=not include_hidden
         )
         
