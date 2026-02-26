@@ -95,7 +95,12 @@ The API key is sourced with the following precedence: **`--api-key`** argument >
 
 If using environment variables, you might set it in your shell profile or create a `.env` file in your project directory *when you are using the tool* (not for installation of the tool itself):
 ```env
+# Required for your specific provider
 OPENAI_API_KEY="YOUR_API_KEY_HERE"
+
+# Optional overrides (useful if using local models or proxies)
+LITELLM_MODEL_NAME="ollama/llama3"
+LITELLM_API_BASE="http://localhost:11434"
 ```
 The tool uses `python-dotenv` to load this if available in the working directory.
 
@@ -334,19 +339,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for help with common error messages, missing module errors, shell quoting syntax, and `PATH` variable setup. 
 
-## Using as an MCP Server
-The `mcp-codebase-searcher` can be used dynamically as a Model Context Protocol (MCP) server. This allows AI clients (like Claude Desktop) to invoke the search and elaborate tools natively when you ask them questions about your codebase.
-
-### Setup for AI Clients
-Modify your client's configuration file (e.g., `claude_desktop_config.json` typically located at `%APPDATA%\Claude\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS) to include the server:
-```json
-{
-  "mcpServers": {
-    "codebase-searcher": {
-      "command": "uv",
-      "args": ["tool", "run", "mcp-codebase-searcher", "mcp-searcher-server"]
-    }
-  }
-}
-```
-*(Alternatively, you can just use `python` or standard `pipx run` environments calling the package's `mcp-searcher-server` executable directly).*
