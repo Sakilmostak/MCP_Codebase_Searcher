@@ -23,6 +23,39 @@ def _load_env_configuration():
     dotenv_path = os.path.join(os.getcwd(), '.env')
     load_dotenv(dotenv_path=dotenv_path, override=True)
 
+AI_USAGE_GUIDELINES = """
+# 🤖 System Rules: MCP Codebase Searcher Guidelines
+
+*If you are an AI assistant reading this file, you have been equipped with the `mcp-codebase-searcher` server integration. You must abide by the following operational rules when executing user prompts involving your available codebase tools.*
+
+## Tool 1: `search_codebase`
+You have access to a lightning-fast regex and text scanner mapped to the underlying filesystem. 
+**When to use:**
+- When the user asks you to "find", "locate", or "where is" a feature or function.
+- When you do not have the complete repository loaded in your prompt context and need to discover where an API endpoint, class, or variable is defined.
+- Always prefer `search_codebase` BEFORE attempting to guess file structures or writing new code that relies on internal implementations.
+
+**Usage Rules:**
+- Keep your `query` extremely concise. Search for unique identifiers like `"def my_function"`, `class UserLogin`, or custom error names. Avoid full sentence queries.
+- It returns an array of JSON objects containing `file_path`, `line_number`, and `snippet`. Only use this snippet for brief verification. If you need to deeply understand the file, pass this output to `elaborate_finding`.
+
+## Tool 2: `elaborate_finding`
+You have access to an out-of-band LLM context-analyzer (`elaborate_finding`) that uses LiteLLM to deeply analyze a codebase file without bloating your own primary context window.
+**When to use:**
+- When `search_codebase` returns a `snippet` that is too small for you to see the full picture.
+- When the user asks you to explain, summarize, or debug a specific file/function you found.
+
+**Usage Rules:**
+- Instead of using native commands to print/cat the entire file into your context (which burns tokens and causes OOMs), pipe the `file_path`, `line_number`, and `snippet` from the search tool directly into `elaborate_finding`.
+- `elaborate_finding` will autonomously read the surrounding 100+ lines, pass it to an external AI model, and return a heavily compressed, semantic summary of the logic *back to you*.
+- Use this summary to inform your final response to the user.
+"""
+
+@mcp.prompt()
+def searcher_guidelines() -> str:
+    """Get the usage guidelines and rules for the codebase searcher tools."""
+    return AI_USAGE_GUIDELINES
+
 @mcp.tool()
 def search_codebase(
     query: str, 
@@ -45,6 +78,11 @@ def search_codebase(
         
     Returns:
         A JSON string containing the list of search findings (file_path, line_number, snippet, match_text).
+        
+    USAGE GUIDELINES FOR AI:
+    - Keep your `query` extremely concise (e.g. "def my_function", "class UserLogin").
+    - Use this tool BEFORE attempting to write code that depends on internal implementations.
+    - If the returned snippet is too small for full understanding, pass the result into `elaborate_finding`.
     """
     try:
         # In MCP context, scanner uses default exclusions automatically
@@ -91,6 +129,10 @@ def elaborate_finding(
         
     Returns:
         A natural language summary and elaboration of the code snippet.
+        
+    USAGE GUIDELINES FOR AI:
+    - Do NOT aggressively read entire files into context if they are massive. Pipe the search tool outputs directly into this elaboration tool.
+    - This tool uses an external sub-agent to fetch and summarize 100+ surrounding lines of code cheaply and efficiently, returning only the dense semantic understanding back to you.
     """
     try:
         _load_env_configuration()
