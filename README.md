@@ -58,6 +58,23 @@ If you want to develop the tool or install it manually from the source code:
     pip install dist/mcp_codebase_searcher-*.whl
     ```
 
+## Using as an MCP Server
+The `mcp-codebase-searcher` can be used dynamically as a Model Context Protocol (MCP) server. This allows AI clients (like Claude Desktop, Cursor) to invoke the search and elaborate tools natively.
+
+### Setup for AI Clients
+Modify your client's configuration file (e.g., `claude_desktop_config.json` typically located at `%APPDATA%\\Claude\\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS) to include the server:
+```json
+{
+  "mcpServers": {
+    "codebase-searcher": {
+      "command": "uv",
+      "args": ["tool", "run", "mcp-codebase-searcher", "mcp-searcher-server"]
+    }
+  }
+}
+```
+*(Alternatively, you can just use standard `pipx run` or Python scripts calling the package's `mcp-searcher-server` executable directly).*
+
 ## Configuration
 
 ### API Key and Model Selection for Elaboration
