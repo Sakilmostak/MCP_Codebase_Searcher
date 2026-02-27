@@ -84,11 +84,16 @@ Modify your VS Code user settings (`Cmd + ,` -> search for "xyne.mcpServers") to
        "--from",
        "mcp-codebase-searcher",
        "mcp-searcher-server"
-     ]
+     ],
+     "env": {
+       "MCP_WORKSPACE_ROOT": "/Users/YOUR_USERNAME/path/to/project"
+     }
    }
  }
 }
 ```
+
+*Tip: Providing `MCP_WORKSPACE_ROOT` in the `env` tells the server exactly where your codebase lives, completely bypassing relative path failures where AI prompts otherwise search the filesystem root (`/`).*
 
 ### Claude Desktop Configuration
 Add the server to your `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):

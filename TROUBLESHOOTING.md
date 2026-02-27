@@ -15,12 +15,14 @@ For a deep dive into historical issues regarding path resolution and logging, re
 
 ### Symptom: The tool returns `[ { "error": "Security/Performance Error..." } ]`
 The AI client passed a relative path (like `.`) to `paths`, while the MCP server's working directory was evaluated as `/`.  
-**Fix:** Immediately instruct your AI to strictly use the **absolute path** to your workspace (e.g. `/Users/YourName/Code/Project`).
+**Fix 1:** Immediately instruct your AI to strictly use the **absolute path** to your workspace (e.g. `/Users/YourName/Code/Project`).
+**Fix 2:** Configure your MCP client settings to inject an `"env"` variable containing `"MCP_WORKSPACE_ROOT": "/Users/YourName/Code/Project"` as deeply documented in the root `README.md`. This will auto-resolve relative paths.
 
 ### Symptom: Empty Results (`[]`) or "0 accessible files found"
 - [ ] Check your background telemetry logs by running `cat ~/.mcp_searcher.log`. This file natively tracks exactly what the scanner sees.
 - [ ] Confirm if the directory path you/the LLM passed to `paths` actually exists.
 - [ ] Your VS Code extension or AI client SDK may be failing to auto-index massive monorepos. Explicitly give the AI a subdirectory inside your project rather than the entire workspace.
+- [ ] Set `"MCP_WORKSPACE_ROOT"` in your client config so the background scanner automatically resolves trailing relative folders properly.
 - [ ] If using Windows, ensure paths are formatted correctly (e.g. `C:\\Users\\...` or `C:/Users/...`).
 
 ### Symptom: "spawn uv ENOENT" Error

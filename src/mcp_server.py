@@ -82,6 +82,30 @@ def read_mcp_searcher_rules() -> str:
     """
     return AI_USAGE_GUIDELINES
 
+def _resolve_paths(raw_paths: list[str]) -> list[str]:
+    """Attempt to aggressively resolve relative paths against known workspace indicators."""
+    resolved = []
+    # If the user explicitly provided a workspace root (e.g. configuring the MCP server env vars)
+    workspace_root = os.getenv("WORKSPACE_ROOT") or os.getenv("MCP_WORKSPACE_ROOT")
+    
+    for p in raw_paths:
+        if os.path.isabs(p):
+            resolved.append(os.path.normpath(p))
+            continue
+            
+        # It's a relative path. 
+        # First, try to prepend explicit workspace_root if provided
+        if workspace_root:
+            candidate = os.path.normpath(os.path.join(workspace_root, p))
+            if os.path.exists(candidate):
+                resolved.append(candidate)
+                continue
+        
+        # Finally, just use standard abspath (which falls back to cwd, often incorrectly `/` in MCP)
+        resolved.append(os.path.abspath(p))
+        
+    return resolved
+
 @mcp.tool()
 async def search_codebase(
     query: str, 
@@ -113,19 +137,30 @@ async def search_codebase(
     - If the returned snippet is too small for full understanding, pass the result into `elaborate_finding`.
     """
     try:
+        # Resolve paths dynamically attempting to use MCP_WORKSPACE_ROOT if available
+        resolved_paths = _resolve_paths(paths)
+        
         # Security & Performance Check: Prevent scanning entire root drives
         # This protects against VS Code extensions defaulting CWD to `/` and timing out
-        resolved_paths = [os.path.abspath(p) for p in paths]
         for rp in resolved_paths:
             # Check for Unix root `/` or Windows roots like `C:\` or `C:/`
             if rp == '/' or re.match(r'^[A-Za-z]:\\?$', rp) or re.match(r'^[A-Za-z]:/?$', rp):
-                error_msg = (
-                    f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}').\n"
-                    f"AI DIAGNOSTIC: You likely passed a relative path (like '.') or an empty path array, "
-                    f"but this MCP server is running at the filesystem root, causing it to resolve to root.\n"
-                    f"CRITICAL FIX: You MUST pass the FULL ABSOLUTE PATH to the user's workspace "
-                    f"(e.g., '/Users/name/project' or 'C:/path/to/project') in the `paths` argument."
-                )
+                # Only error on root if the original path ACTUALLY WAS literally the root string.
+                # If the original path was relative (e.g., ".") and our resolver evaluated it to "/",
+                # we know for certain the MCP client spawned without a working directory payload.
+                orig = paths[resolved_paths.index(rp)]
+                if orig != '/' and not re.match(r'^[A-Za-z]:\\?$', orig):
+                    error_msg = (
+                        f"Path Resolution Error: You provided '{orig}', which resolved to the root directory ('{rp}').\n"
+                        f"Your MCP client did not spawn with a working directory payload.\n"
+                        f"CRITICAL FIX: You MUST pass the FULL ABSOLUTE PATH to the user's workspace "
+                        f"(e.g., '/Users/name/project') in the `paths` argument. Relative paths are temporarily blocked."
+                    )
+                else:
+                    error_msg = (
+                        f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}').\n"
+                        f"Please specify a more targeted workspace folder path in your query."
+                    )
                 logger.error(error_msg)
                 await ctx.error(error_msg)
                 return json.dumps([{"error": error_msg}])
