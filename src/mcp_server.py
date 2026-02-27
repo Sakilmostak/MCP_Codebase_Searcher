@@ -75,6 +75,14 @@ def searcher_guidelines() -> str:
     return AI_USAGE_GUIDELINES
 
 @mcp.tool()
+def read_mcp_searcher_rules() -> str:
+    """
+    CRITICAL: Read this before using search_codebase or elaborate_finding for the first time.
+    Returns the mandatory system rules, path resolution strict guidelines, and best practices for the mcp-codebase-searcher.
+    """
+    return AI_USAGE_GUIDELINES
+
+@mcp.tool()
 async def search_codebase(
     query: str, 
     ctx: Context,
@@ -111,7 +119,13 @@ async def search_codebase(
         for rp in resolved_paths:
             # Check for Unix root `/` or Windows roots like `C:\` or `C:/`
             if rp == '/' or re.match(r'^[A-Za-z]:\\?$', rp) or re.match(r'^[A-Za-z]:/?$', rp):
-                error_msg = f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}'). Please specify a more targeted workspace folder path in your query."
+                error_msg = (
+                    f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}').\n"
+                    f"AI DIAGNOSTIC: You likely passed a relative path (like '.') or an empty path array, "
+                    f"but this MCP server is running at the filesystem root, causing it to resolve to root.\n"
+                    f"CRITICAL FIX: You MUST pass the FULL ABSOLUTE PATH to the user's workspace "
+                    f"(e.g., '/Users/name/project' or 'C:/path/to/project') in the `paths` argument."
+                )
                 logger.error(error_msg)
                 await ctx.error(error_msg)
                 return json.dumps([{"error": error_msg}])
