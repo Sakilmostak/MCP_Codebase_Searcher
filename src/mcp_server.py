@@ -7,7 +7,7 @@ from typing import List, Optional
 
 from dotenv import load_dotenv
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData, INTERNAL_ERROR, INVALID_PARAMS
 
@@ -63,6 +63,7 @@ def searcher_guidelines() -> str:
 @mcp.tool()
 def search_codebase(
     query: str, 
+    ctx: Context,
     paths: list[str] = ["."], 
     is_case_sensitive: bool = False, 
     is_regex: bool = False, 
@@ -96,10 +97,10 @@ def search_codebase(
             # Check for Unix root `/` or Windows roots like `C:\` or `C:/`
             if rp == '/' or re.match(r'^[A-Za-z]:\\?$', rp) or re.match(r'^[A-Za-z]:/?$', rp):
                 error_msg = f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}'). Please specify a more targeted workspace folder path in your query."
-                logger.error(error_msg)
+                ctx.error(error_msg)
                 return json.dumps([{"error": error_msg}])
 
-        logger.info(f"Starting codebase search. Query: '{query}', Paths: {resolved_paths}, Regex: {is_regex}")
+        ctx.info(f"Starting codebase search. Query: '{query}', Paths: {resolved_paths}, Regex: {is_regex}")
 
         # In MCP context, scanner uses default exclusions automatically
         scanner = FileScanner(
@@ -110,10 +111,10 @@ def search_codebase(
         matched_files_data = []
         for path in paths:
             files_found = scanner.scan_directory(path)
-            logger.info(f"Scanned {path}, found {len(files_found)} accessible files.")
+            ctx.info(f"Scanned {path}, found {len(files_found)} accessible files.")
             matched_files_data.extend(files_found)
             
-        logger.info(f"Total files to search: {len(matched_files_data)}")
+        ctx.info(f"Total files to search: {len(matched_files_data)}")
         
         searcher = Searcher(
             query=query,
@@ -122,14 +123,14 @@ def search_codebase(
             context_lines=context_lines
         )
         
-        logger.info(f"Running Searcher over {len(matched_files_data)} files...")
+        ctx.info(f"Running Searcher over {len(matched_files_data)} files...")
         all_results = searcher.search_files(matched_files_data)
-        logger.info(f"Search complete. Found {len(all_results)} matches.")
+        ctx.info(f"Search complete. Found {len(all_results)} matches.")
         
         return json.dumps(all_results, indent=2)
     except Exception as e:
         error_msg = f"Failed to search codebase: {str(e)}"
-        logger.error(error_msg)
+        ctx.error(error_msg)
         raise McpError(ErrorData(code=INTERNAL_ERROR, message=error_msg))
 
 @mcp.tool()
@@ -137,6 +138,7 @@ def elaborate_finding(
     file_path: str,
     line_number: int,
     snippet: str,
+    ctx: Context,
     context_window_lines: int = 10
 ) -> str:
     """
@@ -156,6 +158,7 @@ def elaborate_finding(
     - This tool uses an external sub-agent to fetch and summarize 100+ surrounding lines of code cheaply and efficiently, returning only the dense semantic understanding back to you.
     """
     try:
+        ctx.info(f"Starting ContextAnalyzer sub-agent for elaboration on {file_path}:{line_number}...")
         _load_env_configuration()
         
         api_key = os.getenv('GOOGLE_API_KEY') or os.getenv('OPENAI_API_KEY') or os.getenv('API_KEY')

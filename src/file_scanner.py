@@ -59,7 +59,18 @@ class FileScanner:
         normalized_root_path = os.path.abspath(os.path.expanduser(root_path))
 
         if not os.path.isdir(normalized_root_path):
-            print(f"Error: Root path '{normalized_root_path}' is not a valid directory.", file=sys.stderr)
+            if os.path.isfile(normalized_root_path):
+                # Process single file targeting
+                is_excluded = self._is_excluded(normalized_root_path, os.path.dirname(normalized_root_path), is_dir=False)
+                is_binary = self._is_binary(normalized_root_path)
+                if not is_excluded and not is_binary:
+                    try:
+                        timestamp = os.path.getmtime(normalized_root_path)
+                        return [(normalized_root_path, timestamp)]
+                    except OSError:
+                        pass
+                return []
+            print(f"Error: Root path '{normalized_root_path}' is not a valid directory or file.", file=sys.stderr)
             return []
 
         for dirpath, dirnames, filenames in os.walk(normalized_root_path, followlinks=True):
