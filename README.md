@@ -60,6 +60,13 @@ If you want to develop the tool or install it manually from the source code:
 ## Using as an MCP Server
 The `mcp-codebase-searcher` can be used dynamically as a Model Context Protocol (MCP) server. This allows AI clients (like Claude Desktop, Cursor, Xyne) to invoke the search and elaborate tools natively.
 
+### Available MCP Tools
+When running as an MCP server, the following tools are exposed to the AI client:
+*   **`search_codebase`**: A lightning-fast regex and text scanner mapped to the underlying filesystem. Returns file paths, line numbers, and snippets.
+*   **`elaborate_finding`**: An out-of-band LLM context-analyzer that reads 100+ surrounding lines of a finding and returns a semantic summary, saving the primary AI's context window.
+*   **`read_mcp_searcher_rules`**: A configuration and guidelines tool that instructs the AI on how to properly resolve absolute paths and use the above tools effectively. AI agents are encouraged to read this before executing their first search.
+
+
 ### ⚠️ CRITICAL RULES FOR MCP SETUP ⚠️
 Because MCP servers often spawn independently from your project's command line, they can accidentally start with their working directory pointing to the root of your filesystem (`/` or `C:\`). This completely breaks relative paths and tools.
 
@@ -95,6 +102,8 @@ Modify your VS Code user settings (`Cmd + ,` -> search for "xyne.mcpServers") to
 
 *Tip: Providing `MCP_WORKSPACE_ROOT` in the `env` tells the server exactly where your codebase lives, completely bypassing relative path failures where AI prompts otherwise search the filesystem root (`/`).*
 
+> **Note on Tool Discovery:** You do **not** need to explicitly declare `search_codebase`, `elaborate_finding`, or the new `read_mcp_searcher_rules` tools in your JSON configurations. The MCP protocol handles tool discovery automatically—once the server connects, the AI inherently knows how to use them.
+
 ### Claude Desktop Configuration
 Add the server to your `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 ```json
@@ -107,6 +116,8 @@ Add the server to your `%APPDATA%\Claude\claude_desktop_config.json` (Windows) o
   }
 }
 ```
+
+> **Note on Tool Discovery:** Just like with Xyne, Claude automatically syncs `search_codebase`, `elaborate_finding`, and `read_mcp_searcher_rules` upon connection without needing them hardcoded into `claude_desktop_config.json`.
 
 ### Troubleshooting
 
