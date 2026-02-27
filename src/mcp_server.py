@@ -103,14 +103,17 @@ def search_codebase(
 
         # In MCP context, scanner uses default exclusions automatically
         scanner = FileScanner(
-            exclude_dot_items=not include_hidden
+            exclude_dot_items=not include_hidden,
+            custom_exclude_patterns=['target', 'build', 'dist'] # Common compile outputs
         )
         
-        # We start scan from the paths provided
-        # Since Searcher accepts a list of file paths & timestamps, we scan them consecutively
         matched_files_data = []
         for path in paths:
-            matched_files_data.extend(scanner.scan_directory(path))
+            files_found = scanner.scan_directory(path)
+            logger.info(f"Scanned {path}, found {len(files_found)} accessible files.")
+            matched_files_data.extend(files_found)
+            
+        logger.info(f"Total files to search: {len(matched_files_data)}")
         
         searcher = Searcher(
             query=query,
@@ -119,7 +122,9 @@ def search_codebase(
             context_lines=context_lines
         )
         
+        logger.info(f"Running Searcher over {len(matched_files_data)} files...")
         all_results = searcher.search_files(matched_files_data)
+        logger.info(f"Search complete. Found {len(all_results)} matches.")
         
         return json.dumps(all_results, indent=2)
     except Exception as e:

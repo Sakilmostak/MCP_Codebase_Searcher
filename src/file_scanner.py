@@ -62,7 +62,7 @@ class FileScanner:
             print(f"Error: Root path '{normalized_root_path}' is not a valid directory.", file=sys.stderr)
             return []
 
-        for dirpath, dirnames, filenames in os.walk(normalized_root_path):
+        for dirpath, dirnames, filenames in os.walk(normalized_root_path, followlinks=True):
             # Filter out excluded directories before descending
             original_dirnames = list(dirnames) # Iterate over a copy for safe modification
             dirnames[:] = [] # Clear original list to rebuild
