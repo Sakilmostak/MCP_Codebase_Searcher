@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp_codebase_searcher"
-version = "0.2.5"
+version = "0.2.6"
 authors = [
   { name="Sakilmostak", email="skmahim71@gmail.com" },
 ]

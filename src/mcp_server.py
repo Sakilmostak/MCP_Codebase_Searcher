@@ -53,6 +53,7 @@ You have access to a lightning-fast regex and text scanner mapped to the underly
 - Always prefer `search_codebase` BEFORE attempting to guess file structures or writing new code that relies on internal implementations.
 
 **Usage Rules:**
+- **CRITICAL: EXCLUSIVELY USE ABSOLUTE PATHS.** The MCP server environment may execute from the filesystem root (`/`) rather than the workspace you are currently in. Relative paths like `.` or `src/` will fail silently or throw security errors. You MUST resolve the full absolute path of the user's workspace (e.g. `/Users/name/project`) before calling this tool.
 - Keep your `query` extremely concise. Search for unique identifiers like `"def my_function"`, `class UserLogin`, or custom error names. Avoid full sentence queries.
 - It returns an array of JSON objects containing `file_path`, `line_number`, and `snippet`. Only use this snippet for brief verification. If you need to deeply understand the file, pass this output to `elaborate_finding`.
 
@@ -88,7 +89,7 @@ async def search_codebase(
     
     Args:
         query: The search string or regex pattern.
-        paths: List of directories or files to search within. Defaults to current directory.
+        paths: List of directories or files to search within. MUST BE ABSOLUTE PATHS (e.g. /Users/name/project). Do not use relative paths like '.' as they will resolve to root.
         is_case_sensitive: Whether the search should be case sensitive.
         is_regex: Whether the query should be treated as a regular expression.
         context_lines: Number of lines of context to include before and after each match.
@@ -98,6 +99,7 @@ async def search_codebase(
         A JSON string containing the list of search findings (file_path, line_number, snippet, match_text).
         
     USAGE GUIDELINES FOR AI:
+    - CRITICAL: ALWAYS USE ABSOLUTE PATHS for the `paths` argument (e.g., `/Users/username/workspace`). Do NOT use `.` or relative paths, as the server runs independently and will resolve relative paths against `/`.
     - Keep your `query` extremely concise (e.g. "def my_function", "class UserLogin").
     - Use this tool BEFORE attempting to write code that depends on internal implementations.
     - If the returned snippet is too small for full understanding, pass the result into `elaborate_finding`.

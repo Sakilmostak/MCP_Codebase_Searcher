@@ -57,24 +57,64 @@ If you want to develop the tool or install it manually from the source code:
     ```bash
     pip install dist/mcp_codebase_searcher-*.whl
     ```
-
 ## Using as an MCP Server
-The `mcp-codebase-searcher` can be used dynamically as a Model Context Protocol (MCP) server. This allows AI clients (like Claude Desktop, Cursor) to invoke the search and elaborate tools natively.
+The `mcp-codebase-searcher` can be used dynamically as a Model Context Protocol (MCP) server. This allows AI clients (like Claude Desktop, Cursor, Xyne) to invoke the search and elaborate tools natively.
 
-### Setup for AI Clients
-Modify your client's configuration file (e.g., `claude_desktop_config.json` typically located at `%APPDATA%\\Claude\\claude_desktop_config.json` on Windows or `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS) to include the server:
+### ⚠️ CRITICAL RULES FOR MCP SETUP ⚠️
+Because MCP servers often spawn independently from your project's command line, they can accidentally start with their working directory pointing to the root of your filesystem (`/` or `C:\`). This completely breaks relative paths and tools.
+
+**Rule 1: Always use FULL absolute paths for your executable command.**  
+Find where `uv` is installed (`which uv`) and use that exact path.
+
+**Rule 2: The LLM should be instructed to use absolute paths.**  
+When using the tool through an AI, assure the system prompt or your questions specify the absolute path to your workspace.
+
+### Xyne Configuration Best Practices
+Modify your VS Code user settings (`Cmd + ,` -> search for "xyne.mcpServers") to securely mount the tool and write robust fallback logs:
+
+```json
+{
+ "xyne.mcpServers": {
+   "codebase-searcher": {
+     "type": "stdio",
+     "command": "/Users/YOUR_USERNAME/.local/bin/uv",
+     "args": [
+       "tool",
+       "run",
+       "--from",
+       "mcp-codebase-searcher",
+       "mcp-searcher-server"
+     ]
+   }
+ }
+}
+```
+
+### Claude Desktop Configuration
+Add the server to your `%APPDATA%\Claude\claude_desktop_config.json` (Windows) or `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 ```json
 {
   "mcpServers": {
     "codebase-searcher": {
-      "command": "uv",
+      "command": "/full/path/to/uv",
       "args": ["tool", "run", "--from", "mcp-codebase-searcher", "mcp-searcher-server"]
     }
   }
 }
 ```
-*(If your editor, like Xyne, fails to find `uv`, use its exact absolute path like `"/Users/username/.local/bin/uv"`. Some VS Code extensions also require you to add `"type": "stdio"` to this block).*
-*(Alternatively, you can just use standard `pipx run` or Python scripts calling the package's `mcp-searcher-server` executable directly).*
+
+### Troubleshooting
+
+**Symptom: The tool returns `[ { "error": "Security/Performance Error..." } ]`**  
+The AI client passed a relative path (like `.`) while the MCP server's working directory was `/`. Immediately remind the AI to use the **absolute path** to your workspace.
+
+**Symptom: Empty Results (`[]`) or "0 accessible files found"**  
+1. Run `cat ~/.mcp_searcher.log` to view the diagnostic logs from the server.
+2. Check if the logged path actually exists as an absolute path.
+3. Your VS Code extension or AI client may be failing to auto-index the repository. Give the AI an explicit subdirectory to narrow the scope.
+
+**Symptom: "spawn uv ENOENT" Error**  
+You used just `"command": "uv"`, but your AI client doesn't have `~/.local/bin` in its PATH wrapper. Switch back to the full absolute path for `uv`.
 
 ## Configuration
 
