@@ -105,16 +105,8 @@ Add the server to your `%APPDATA%\Claude\claude_desktop_config.json` (Windows) o
 
 ### Troubleshooting
 
-**Symptom: The tool returns `[ { "error": "Security/Performance Error..." } ]`**  
-The AI client passed a relative path (like `.`) while the MCP server's working directory was `/`. Immediately remind the AI to use the **absolute path** to your workspace.
-
-**Symptom: Empty Results (`[]`) or "0 accessible files found"**  
-1. Run `cat ~/.mcp_searcher.log` to view the diagnostic logs from the server.
-2. Check if the logged path actually exists as an absolute path.
-3. Your VS Code extension or AI client may be failing to auto-index the repository. Give the AI an explicit subdirectory to narrow the scope.
-
-**Symptom: "spawn uv ENOENT" Error**  
-You used just `"command": "uv"`, but your AI client doesn't have `~/.local/bin` in its PATH wrapper. Switch back to the full absolute path for `uv`.
+If your `search_codebase` tool is returning `[]` or throwing `Security/Performance Error` messages, this is usually caused by your AI client spawning the background server at the filesystem root. 
+Please refer to the comprehensive [**Troubleshooting Guide**](./TROUBLESHOOTING.md) for solutions covering Xyne, Claude Desktop, and logging.
 
 ## Configuration
 
@@ -375,8 +367,4 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Troubleshooting
-
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for help with common error messages, missing module errors, shell quoting syntax, and `PATH` variable setup. 
 
