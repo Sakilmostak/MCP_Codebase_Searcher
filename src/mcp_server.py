@@ -15,6 +15,10 @@ from file_scanner import FileScanner
 from mcp_search import Searcher
 from mcp_elaborate import ContextAnalyzer
 
+# Configure basic logging for debugging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger("mcp-codebase-searcher")
+
 # Initialize FastMCP server
 mcp = FastMCP("mcp-codebase-searcher")
 
@@ -85,6 +89,18 @@ def search_codebase(
     - If the returned snippet is too small for full understanding, pass the result into `elaborate_finding`.
     """
     try:
+        # Security & Performance Check: Prevent scanning entire root drives
+        # This protects against VS Code extensions defaulting CWD to `/` and timing out
+        resolved_paths = [os.path.abspath(p) for p in paths]
+        for rp in resolved_paths:
+            # Check for Unix root `/` or Windows roots like `C:\` or `C:/`
+            if rp == '/' or re.match(r'^[A-Za-z]:\\?$', rp) or re.match(r'^[A-Za-z]:/?$', rp):
+                error_msg = f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}'). Please specify a more targeted workspace folder path in your query."
+                logger.error(error_msg)
+                return json.dumps([{"error": error_msg}])
+
+        logger.info(f"Starting codebase search. Query: '{query}', Paths: {resolved_paths}, Regex: {is_regex}")
+
         # In MCP context, scanner uses default exclusions automatically
         scanner = FileScanner(
             exclude_dot_items=not include_hidden
@@ -108,7 +124,7 @@ def search_codebase(
         return json.dumps(all_results, indent=2)
     except Exception as e:
         error_msg = f"Failed to search codebase: {str(e)}"
-        logging.error(error_msg)
+        logger.error(error_msg)
         raise McpError(ErrorData(code=INTERNAL_ERROR, message=error_msg))
 
 @mcp.tool()

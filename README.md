@@ -68,11 +68,12 @@ Modify your client's configuration file (e.g., `claude_desktop_config.json` typi
   "mcpServers": {
     "codebase-searcher": {
       "command": "uv",
-      "args": ["tool", "run", "mcp-codebase-searcher", "mcp-searcher-server"]
+      "args": ["tool", "run", "--from", "mcp-codebase-searcher", "mcp-searcher-server"]
     }
   }
 }
 ```
+*(If your editor, like Xyne, fails to find `uv`, use its exact absolute path like `"/Users/username/.local/bin/uv"`. Some VS Code extensions also require you to add `"type": "stdio"` to this block).*
 *(Alternatively, you can just use standard `pipx run` or Python scripts calling the package's `mcp-searcher-server` executable directly).*
 
 ## Configuration
