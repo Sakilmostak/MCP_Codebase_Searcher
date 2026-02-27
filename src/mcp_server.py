@@ -15,9 +15,22 @@ from file_scanner import FileScanner
 from mcp_search import Searcher
 from mcp_elaborate import ContextAnalyzer
 
+import logging.handlers
+
 # Configure basic logging for debugging
+log_file = os.path.expanduser("~/.mcp_searcher.log")
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("mcp-codebase-searcher")
+
+# Add a rotating file handler to dump logs specifically for the user to debug
+try:
+    file_handler = logging.handlers.RotatingFileHandler(
+        log_file, maxBytes=5*1024*1024, backupCount=2
+    )
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
+except Exception:
+    pass # Failsafe if we can't write to their home directory
 
 # Initialize FastMCP server
 mcp = FastMCP("mcp-codebase-searcher")
@@ -97,9 +110,11 @@ async def search_codebase(
             # Check for Unix root `/` or Windows roots like `C:\` or `C:/`
             if rp == '/' or re.match(r'^[A-Za-z]:\\?$', rp) or re.match(r'^[A-Za-z]:/?$', rp):
                 error_msg = f"Security/Performance Error: Attempted to scan the entire filesystem root ('{rp}'). Please specify a more targeted workspace folder path in your query."
+                logger.error(error_msg)
                 await ctx.error(error_msg)
                 return json.dumps([{"error": error_msg}])
 
+        logger.info(f"Starting codebase search. Query: '{query}', Paths: {resolved_paths}, Regex: {is_regex}")
         await ctx.info(f"Starting codebase search. Query: '{query}', Paths: {resolved_paths}, Regex: {is_regex}")
 
         # In MCP context, scanner uses default exclusions automatically
@@ -111,9 +126,11 @@ async def search_codebase(
         matched_files_data = []
         for path in paths:
             files_found = scanner.scan_directory(path)
+            logger.info(f"Scanned {path}, found {len(files_found)} accessible files.")
             await ctx.info(f"Scanned {path}, found {len(files_found)} accessible files.")
             matched_files_data.extend(files_found)
             
+        logger.info(f"Total files to search: {len(matched_files_data)}")
         await ctx.info(f"Total files to search: {len(matched_files_data)}")
         
         searcher = Searcher(
@@ -123,13 +140,16 @@ async def search_codebase(
             context_lines=context_lines
         )
         
+        logger.info(f"Running Searcher over {len(matched_files_data)} files...")
         await ctx.info(f"Running Searcher over {len(matched_files_data)} files...")
         all_results = searcher.search_files(matched_files_data)
+        logger.info(f"Search complete. Found {len(all_results)} matches.")
         await ctx.info(f"Search complete. Found {len(all_results)} matches.")
         
         return json.dumps(all_results, indent=2)
     except Exception as e:
         error_msg = f"Failed to search codebase: {str(e)}"
+        logger.error(error_msg)
         await ctx.error(error_msg)
         raise McpError(ErrorData(code=INTERNAL_ERROR, message=error_msg))
 
@@ -158,6 +178,7 @@ async def elaborate_finding(
     - This tool uses an external sub-agent to fetch and summarize 100+ surrounding lines of code cheaply and efficiently, returning only the dense semantic understanding back to you.
     """
     try:
+        logger.info(f"Starting ContextAnalyzer sub-agent for elaboration on {file_path}:{line_number}...")
         await ctx.info(f"Starting ContextAnalyzer sub-agent for elaboration on {file_path}:{line_number}...")
         _load_env_configuration()
         
