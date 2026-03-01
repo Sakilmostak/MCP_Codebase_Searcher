@@ -119,6 +119,20 @@ Add the server to your `%APPDATA%\Claude\claude_desktop_config.json` (Windows) o
 
 > **Note on Tool Discovery:** Just like with Xyne, Claude automatically syncs `search_codebase`, `elaborate_finding`, and `read_mcp_searcher_rules` upon connection without needing them hardcoded into `claude_desktop_config.json`.
 
+### Enforcing MCP Tool Usage (Optional)
+
+AI assistants (like Claude, Cursor, or Windsurf) often try to use their "native" search tools before realizing they have a faster MCP tool available. To permanently force your AI to use the MCP codebase searcher instead of native tools, you can create a project rules file.
+
+Create a `.cursorrules`, `.windsurfrules`, or `.github/copilot-instructions.md` file in the root of your project and paste this exact snippet:
+
+```markdown
+When you need to explore or search this repository, you MUST strictly follow these rules:
+1. ALWAYS prioritize using the `search_codebase` MCP tool for exploration and searching.
+2. ONLY use your native search tools (like your built-in editor search or bash grep commands) as a fallback IF the MCP tool fails or cannot complete the request.
+3. If the search results are too small to understand, immediately pipe the finding into the `elaborate_finding` MCP tool to get the full semantic context.
+4. Before issuing your first search, trigger the `read_mcp_searcher_rules` tool to ensure your pathing parameters are correct.
+```
+
 ### Troubleshooting
 
 If your `search_codebase` tool is returning `[]` or throwing `Security/Performance Error` messages, this is usually caused by your AI client spawning the background server at the filesystem root. 

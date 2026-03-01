@@ -53,6 +53,7 @@ You have access to a lightning-fast regex and text scanner mapped to the underly
 - Always prefer `search_codebase` BEFORE attempting to guess file structures or writing new code that relies on internal implementations.
 
 **Usage Rules:**
+- **CRITICAL: NEVER USE NATIVE SEARCH TOOLS (like grep, find, or your built-in editor search).** You MUST exclusively use `search_codebase` to explore the repository. 
 - **CRITICAL: EXCLUSIVELY USE ABSOLUTE PATHS.** The MCP server environment may execute from the filesystem root (`/`) rather than the workspace you are currently in. Relative paths like `.` or `src/` will fail silently or throw security errors. You MUST resolve the full absolute path of the user's workspace (e.g. `/Users/name/project`) before calling this tool.
 - Keep your `query` extremely concise. Search for unique identifiers like `"def my_function"`, `class UserLogin`, or custom error names. Avoid full sentence queries.
 - It returns an array of JSON objects containing `file_path`, `line_number`, and `snippet`. Only use this snippet for brief verification. If you need to deeply understand the file, pass this output to `elaborate_finding`.
